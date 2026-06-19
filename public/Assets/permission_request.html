@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>RoValra permission request</title>
+        <style>
+            :root {
+                color-scheme: light dark;
+                font: 15px system-ui, sans-serif;
+            }
+
+            body {
+                margin: 0;
+                padding: 28px;
+                background: Canvas;
+                color: CanvasText;
+            }
+
+            h1 {
+                margin: 0 0 12px;
+                font-size: 22px;
+            }
+
+            p {
+                line-height: 1.5;
+            }
+
+            #permList {
+                padding-left: 20px;
+            }
+
+            .actions {
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+                margin-top: 24px;
+            }
+
+            button {
+                border: 1px solid ButtonBorder;
+                border-radius: 8px;
+                padding: 9px 16px;
+                font: inherit;
+                cursor: pointer;
+            }
+
+            #grantBtn {
+                background: #335fff;
+                border-color: #335fff;
+                color: white;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Allow RoValra permission?</h1>
+        <p>
+            This feature needs
+            <strong id="permName">an additional permission</strong>. Firefox
+            requires the confirmation to happen in this extension window.
+        </p>
+        <ul id="permList"></ul>
+        <div class="actions">
+            <button id="denyBtn" type="button">Cancel</button>
+            <button id="grantBtn" type="button">Allow</button>
+        </div>
+        <script src="permission_request.js"></script>
+    </body>
+</html>
