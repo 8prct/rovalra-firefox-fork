@@ -38,8 +38,11 @@ try {
 //E why the hell did i make this comment?
 const bannerText = `/*!
  * ${pkg.name} v${pkg.version}
+ * Firefox/Zen port maintained by 8prct
+ * Fork: https://github.com/8prct/rovalra-firefox-fork
+ * Original project by NotValra
  * License: GPL-3.0
- * Repository: https://github.com/NotValra/RoValra
+ * Upstream: https://github.com/NotValra/RoValra
  * This extension is provided AS-IS without warranty.
  */`;
 

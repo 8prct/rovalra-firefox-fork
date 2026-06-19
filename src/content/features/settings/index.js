@@ -1337,6 +1337,10 @@ export const buttonData = [
                 <h2 style="margin-bottom: 10px; color: var(--rovalra-main-text-color) !important;">${ts('settings.credits.title')}</h2>
                 <ul style="margin-top: 10px; padding-left: 0px; color: var(--rovalra-secondary-text-color);">
                     <li style="margin-bottom: 8px; list-style-type: disc; margin-left: 20px;">
+                        ${ts('settings.credits.firefoxPort')}
+                        <a href="https://github.com/8prct/rovalra-firefox-fork" target="_blank" class="rovalra-github-link">GitHub</a>
+                    </li>
+                    <li style="margin-bottom: 8px; list-style-type: disc; margin-left: 20px;">
                         ${ts('settings.credits.frames')}
                         <a href="https://github.com/workframes/roblox-owner-counts" target="_blank" class="rovalra-github-link">${ts('settings.info.github')}</a>
                     </li>

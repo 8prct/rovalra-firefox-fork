@@ -1,9 +1,12 @@
-## Firefox / Zen fork
+## RoValra Firefox / Zen port by 8prct
 
-This workspace packages the current RoValra source as a Firefox Manifest V3
-extension for Firefox-based browsers such as
-[Zen Browser](https://zen-browser.app/).
+This repository is the unofficial Firefox and
+[Zen Browser](https://zen-browser.app/) port of **RoValra 2.5.6**, maintained
+by [8prct](https://github.com/8prct).
 It requires a Firefox 142-compatible Zen release or newer.
+
+- **Firefox / Zen port:** [8prct](https://github.com/8prct)
+- **Original RoValra project:** [NotValra/RoValra](https://github.com/NotValra/RoValra)
 
 Build and load it locally:
 
@@ -19,8 +22,9 @@ Temporary add-ons are removed when Zen exits. A persistent install requires a
 Mozilla-signed `.xpi` (or a browser build configured to permit unsigned
 extensions).
 
-This is an unofficial community port. The original project and GPL-3.0 license
-are preserved below.
+This is an unofficial port and is not affiliated with Mozilla, Zen Browser, or
+the original RoValra developers. The original project attribution and GPL-3.0
+license are preserved below.
 
 ---
 
@@ -56,7 +60,7 @@ are preserved below.
 - **FAQ & Support:** https://www.rovalra.com/support/
 
 > [!WARNING]
-> RoValra is only distributed through the official [website](https://rovalra.com), [Chrome Web Store](https://chromewebstore.google.com/detail/RoValra%20-%20Roblox%20Improved/njcickgebhnpgmoodjdgohkclfplejli) and unofficially through [Firefox](https://github.com/rav4toy/RoValra-Firefox)
+> The original RoValra project is distributed through its official [website](https://rovalra.com) and [Chrome Web Store](https://chromewebstore.google.com/detail/RoValra%20-%20Roblox%20Improved/njcickgebhnpgmoodjdgohkclfplejli). This repository is the unofficial Firefox/Zen port maintained by [8prct](https://github.com/8prct).
 
 ---
 
@@ -70,14 +74,16 @@ It helps a lot and supports continued development.
 
 ## Installation
 
-### Option 1: Chrome Web Store and Firefox Web Store (Recommended)
+### Option 1: Chrome or this Firefox / Zen fork
 
-Install directly from the [Chrome Web Store](https://chromewebstore.google.com/detail/RoValra%20-%20Roblox%20Improved/njcickgebhnpgmoodjdgohkclfplejli) Or [FireFox (Unofficial port)](https://addons.mozilla.org/en-US/firefox/addon/rovalra-rav4/)
+For Chrome, use the original [Chrome Web Store release](https://chromewebstore.google.com/detail/RoValra%20-%20Roblox%20Improved/njcickgebhnpgmoodjdgohkclfplejli).
+For Firefox or Zen, use the XPI included in this repository or follow the
+temporary installation instructions above.
 
 > [!WARNING]
-> Firefox port of RoValra is **unofficial and not controlled by us.**\
-> Please verify what you are downloading is trustworthy before you download it by reading the [source code](https://github.com/rav4toy/RoValra-Firefox)\
-> The FireFox port is use at your own risk
+> This Firefox/Zen port is unofficial. It is maintained by 8prct, not by the
+> original RoValra developers. Review the source before installing and use it
+> at your own risk.
 
 ---
 
@@ -106,6 +112,12 @@ npm run build
 ---
 
 ## Credits
+
+- **Firefox / Zen Port and Maintenance:**
+  [8prct](https://github.com/8prct)
+
+- **Original RoValra Development:**
+  [NotValra/RoValra](https://github.com/NotValra/RoValra)
 
 - **Contributors:**
   [https://github.com/NotValra/RoValra/graphs/contributors](https://github.com/NotValra/RoValra/graphs/contributors)

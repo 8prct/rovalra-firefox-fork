@@ -311,6 +311,7 @@
         },
         "credits": {
             "title": "RoValra Credits!",
+            "firefoxPort": "Firefox and Zen Browser port maintained by <b style=\"font-weight: bold;\">8prct</b>. Original RoValra created by <b style=\"font-weight: bold;\">NotValra</b> and its contributors.",
             "contributed": "Thanks to <b style=\"font-weight: bold;\">everyone who</b> <a href=\"https://github.com/NotValra/RoValra/graphs/contributors\" target=\"_blank\" class=\"rovalra-github-link\">contributed</a>",
             "frames": "Thanks to <b style=\"font-weight: bold;\">Frames</b> for somehow getting the Roblox sales and revenue on some items",
             "julia": "Thanks to <b style=\"font-weight: bold;\">Julia</b> for making a repo with all Roblox server datacenters which I used to use to get the regions, but now I switched to my own api.",

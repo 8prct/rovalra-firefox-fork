@@ -1,7 +1,12 @@
 {
     "name": "rovalra",
     "version": "2.5.6",
-    "description": "An extension aiming to provide features that other Roblox extensions pay wall!",
+    "description": "Unofficial Firefox and Zen Browser port of RoValra.",
+    "author": "8prct",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/8prct/rovalra-firefox-fork.git"
+    },
     "private": true,
     "scripts": {
         "build": "npm run clean && node build.js",
