@@ -10,6 +10,10 @@
         "settingsTitle": "Category Settings",
         "visibility": "Visibility",
         "visibilityDescription": "Choose whether this category appears on Home.",
+        "accurateContinue": "Accurate Continue",
+        "accurateContinueDescription": "Sort Continue by when you last played each game.",
+        "enable": "Enable",
+        "disable": "Disable",
         "show": "Show",
         "hide": "Hide"
     },
@@ -288,7 +292,7 @@
     "settings": {
         "tabs": {
             "info": "Info",
-            "credits": "Credits",
+            "credits": "Contributors",
             "donatorPerks": "Donator Perks",
             "settings": "Settings",
             "accountStanding": "Account Standing"
@@ -299,7 +303,6 @@
             "desc2": "Some free features still rely on RoValra servers and cost money to run.",
             "desc3": "Supporter donations help cover those costs, letting RoValra keep more features free for everyone while continuing to improve over time. ❤️",
             "desc4": "RoValra is a passion project and has always been one.",
-            "gilbert": "We try to make RoValra less professional, as being too professional is boring, which is why we have Gilbert, aka the logo, a silly fish from Fisch.",
             "suggestions": "If you have any feature suggestions please let me know in my Discord server or via GitHub",
             "bugs": "If you find any bugs let me know in my Discord server or via GitHub",
             "review": "If you like this extension please consider <a href=\"https://chromewebstore.google.com/detail/rovalra-roblox-improved/njcickgebhnpgmoodjdgohkclfplejli/reviews\" target=\"_blank\" class=\"rovalra-review-link\">leaving a review</a>, it helps a lot ❤️",
@@ -310,18 +313,19 @@
             "x": "X: ValraSwag"
         },
         "credits": {
-            "title": "RoValra Credits!",
             "firefoxPort": "Firefox and Zen Browser port maintained by <b style=\"font-weight: bold;\">8prct</b>. Original RoValra created by <b style=\"font-weight: bold;\">NotValra</b> and its contributors.",
-            "contributed": "Thanks to <b style=\"font-weight: bold;\">everyone who</b> <a href=\"https://github.com/NotValra/RoValra/graphs/contributors\" target=\"_blank\" class=\"rovalra-github-link\">contributed</a>",
-            "frames": "Thanks to <b style=\"font-weight: bold;\">Frames</b> for somehow getting the Roblox sales and revenue on some items",
-            "julia": "Thanks to <b style=\"font-weight: bold;\">Julia</b> for making a repo with all Roblox server datacenters which I used to use to get the regions, but now I switched to my own api.",
-            "aspect": "Thanks to <b style=\"font-weight: bold;\">Aspect</b> for helping me out here and there when I had a bunch of dumb questions or problems.",
-            "l5se": "Thanks to <b style=\"font-weight: bold;\">l5se</b> for allowing me to use their open source region selector as a template for my extension.",
-            "lz": "Thanks to <b style=\"font-weight: bold;\">7_lz</b> for helping me a bunch when preparing for the Chrome Web Store release. They helped a ton and I'm very thankful.",
-            "mmfw": "Thanks to <b style=\"font-weight: bold;\">mmfw</b> for making the screenshots on the chrome web store, and general help with UI design of the extension.",
-            "coweggs": "Thanks to <b style=\"font-weight: bold;\">Coweggs</b> for coming up with the very funny name that is \"RoValra\" as a joke that I then ended up using.",
-            "woozynate": "Thanks to <b style=\"font-weight: bold;\">WoozyNate</b> for making the amazing game called fisch, which is where Gilbert (the logo) is from <3",
             "contributorsTitle": "Contributors",
+            "contributorTooltips": {
+                "146089324": "WoozyNate made fisch, which is where the old RoValra logo is from. You should check out fisch!",
+                "1337447242": "Made the new logo and all store page images.",
+                "795922138": "Came up with the name 'RoValra' as a joke, which was too funny not to use."
+            },
+            "sortLabel": "Sort contributors",
+            "sortMost": "Most",
+            "sortLeast": "Least",
+            "contributionCount_one": "Contributed to {{count}} feature",
+            "contributionCount_other": "Contributed to {{count}} features",
+            "backendContributorsNote": "These people helped with non feature related things.",
             "loadingContributors": "Loading...",
             "failedToLoadContributors": "Failed to load contributors."
         },
@@ -332,19 +336,22 @@
             "howToGetDesc": "You can donate by purchasing a gamepasses in the support game.",
             "goToGame": "Go to Donation Game",
             "perkTiers": "Perk Tiers",
+            "perk": "Perk",
             "tier1": "Tier 1: Supporter",
             "tier1Desc": "Donate <strong>any amount</strong>",
-            "tier1Reward": "Supporter 1 Badge",
+            "tier1Reward": "Donator 1 Badge",
+            "tier1DiscordRole": "Donator 1 Discord role + extra Discord perks.",
             "tier1Feature": "Set Status and environments without adding a string to your about me.",
             "tier2": "Tier 2: Supporter",
             "tier2Desc": "Donate <strong>200+ Robux</strong>",
-            "tier2Reward": "Supporter 2 Badge",
+            "tier2Reward": "Donator 2 Badge",
+            "tier2DiscordRole": "Donator 2 Discord role + upgraded Discord perks.",
             "tier3": "Tier 3: Supporter",
             "tier3Desc": "Donate <strong>500+ Robux</strong>",
-            "tier3Reward": "Supporter 3 Badge",
+            "tier3Reward": "Donator 3 Badge",
+            "tier3DiscordRole": "Donator 3 Discord role + best Discord perks.",
             "previousRewards": "+ All previous tier rewards",
             "moreComingSoon": "More coming soon.",
-            "availableBadges": "Available Badges",
             "note": "Note:\n- Badges may take a few minutes to appear after donation.\n- To manage badge visibility, go to the 'Profile' settings tab. \n- Donating through commissions sadly won't give a donator perks, this is a Roblox limitation.\n- When donating you agree to [RoValra's Terms of Use](https://www.rovalra.com/tou/)"
         },
         "search": {
@@ -369,7 +376,8 @@
         "noPermissions": "No Permission"
     },
     "navigation": {
-        "transactions": "Transactions"
+        "transactions": "Transactions",
+        "apiDocs": "API Docs"
     },
     "sidebarCollapse": {
         "collapseSidebar": "Collapse sidebar",
@@ -380,13 +388,20 @@
         "options": {
             "normal": "Normal Roblox",
             "kids": "Roblox Kids",
-            "select": "Roblox Select"
+            "select": "Roblox Select",
+            "startmode": "Roblox Leaked Select (Start Mode)"
+        },
+        "badge": {
+            "kids": "KIDS",
+            "select": "SELECT"
         }
     },
     "betaPrograms": {
         "toggleTooltip": "Toggle Beta Programs",
         "noPrograms": "You are not enrolled into any beta programs.",
-        "allowlist": "In an allowlist"
+        "allowlist": "In an allowlist",
+        "previousProgramsTitle": "Previously enrolled beta programs",
+        "previousProgramTooltip": "This beta program is no longer available."
     },
     "quickSearch": {
         "aborted": "Aborted",
@@ -446,6 +461,26 @@
         "order": {
             "ascending": "Sort Ascending",
             "descending": "Sort Descending"
+        }
+    },
+    "shop": {
+        "tab": "Shop",
+        "all": "All",
+        "category": "Category",
+        "product": "Product",
+        "gamePass": "Game Pass",
+        "robuxAmount": "{{amount}} Robux",
+        "bonusItem": "Bonus: {{item}}",
+        "bonusItemFallback": "Includes a bonus item",
+        "noItems": "No shop items found.",
+        "failedToLoad": "Failed to load shop items.",
+        "sections": {
+            "robux": "Robux"
+        },
+        "types": {
+            "Product": "Product",
+            "GamePass": "Game Pass",
+            "Robux": "Robux bundle"
         }
     },
     "subplaces": {
@@ -630,6 +665,18 @@
             "selectInstance": "Select an instance to view its properties",
             "noProperties": "No properties",
             "viewSource": "View Source",
+            "closePreview": "Close Preview",
+            "defaultDevice": "Default (1280x720)",
+            "fitToWindow": "Fit to Window",
+            "actualResolution": "Actual Resolution",
+            "physicalSize": "Physical Size",
+            "rotate": "Rotate",
+            "loadingPreview": "Loading GUI preview...",
+            "searchInstances": "Search instances... (2+ chars)",
+            "searchProperties": "Search properties...",
+            "previewGui": "Preview GUI",
+            "togglePreviewVisibility": "Toggle visibility in preview",
+            "noMatchingInstances": "No matching instances found",
             "loadError": "Failed to load."
         }
     },
@@ -904,13 +951,33 @@
         "joinedLabel": "Joined",
         "unknown": "Unknown"
     },
+    "profileCustomization": {
+        "pill": "Customization",
+        "pillTooltip": "Switch your avatar borders.",
+        "title": "Profile Customization",
+        "currentPreview": "Current Selection Preview",
+        "unequip": "Unequip",
+        "unequipTooltip": "Click to unequip this border",
+        "equip": "Equip",
+        "equipTooltip": "Equip this border",
+        "equipped": "Equipped",
+        "getMore": "Get More",
+        "owned": "Owned",
+        "unowned": "Unowned",
+        "unownedTooltip": "You do not own this border yet.",
+        "all": "All",
+        "new": "New",
+        "static": "STATIC",
+        "animated": "ANIMATED",
+        "free": "Free",
+        "noBorders": "No borders found.",
+        "noBordersInTab": "No borders found in this tab.",
+        "failedToLoad": "Failed to load your borders. Please try again later."
+    },
     "profile": {
         "currencyTransfer": "Send Robux",
         "currencyTransferConfirmation": "This will open the Roblox client allowing you to send robux.",
         "openClient": "Open Client"
-    },
-    "plusPrivateServerTooltip": {
-        "tooltipText": "Original Price: <b>{{originalPrice}} Robux</b><br>Currently shows as <b>Free</b> due to Roblox Plus."
     },
     "animations": {
         "idle": "Idle",
@@ -935,5 +1002,19 @@
             "oldest": "Oldest"
         },
         "tooltip": "Sort by when the user joined the community"
+    },
+    "plus": {
+        "stats": {
+            "robux": "You've saved {{robux}} when you had Plus",
+            "percentOffSmall": "In-game items, avatars and more",
+            "percentOff": "{{percent}} off",
+            "itemsBoughtSmall": "Items bought with Plus discount",
+            "privateServersCreatedSmall": "Private servers created for free",
+            "robuxSentSmall": "Robux sent to friends",
+            "delayNotice": "All data shown here is delayed by 1 day"
+        },
+        "privateServerTooltip": {
+            "tooltipText": "Original Price: <b>{{originalPrice}} Robux</b><br>Currently shows as <b>Free</b> due to Roblox Plus."
+        }
     }
 }

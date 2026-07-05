@@ -37,7 +37,10 @@ import { createOverlay } from '../../core/ui/overlay.js';
 import { createInteractiveTimestamp } from '../../core/ui/time/time.js';
 import { createStyledInput } from '../../core/ui/catalog/input.js';
 import { getAuthenticatedUserId } from '../../core/user.js';
-import { parseMarkdown } from '../../core/utils/markdown.js';
+import {
+    parseMarkdown,
+    parseUntrustedMarkdown,
+} from '../../core/utils/markdown.js';
 import { getCurrentTheme, THEME_CONFIG } from '../../core/theme.js';
 import {
     getBatchThumbnails,
@@ -52,6 +55,7 @@ import {
 import { getBorders, getCachedBorders } from '../../core/configs/borders.js';
 import { createUserCard } from '../../core/ui/profile/userCard.js';
 import { createPill } from '../../core/ui/general/pill.js';
+import { createPillToggle } from '../../core/ui/general/pillToggle.js';
 import {
     applyBorderToContainer,
     findInBorders,
@@ -61,9 +65,17 @@ import {
     getUserProfileData,
 } from '../../core/apis/users.js';
 import { showSystemAlert } from '../../core/ui/roblox/alert.js';
+import { isAuthenticatedUserUnder16OrNotAgeChecked } from '../../core/utils/trackers/birthday.js';
+import { createSquareButton } from '../../core/ui/profile/header/squarebutton.js';
 
 const assets = getAssets();
 let REGIONS = {};
+
+const DONATOR_PERKS_GAME_URL =
+    'https://www.roblox.com/games/store-section/9452973012';
+const DONATOR_PERKS_FALLBACK_ONSALE_URL =
+    'https://www.roblox.com/catalog?taxonomy=tZsUsd2BqGViQrJ9Vs3Wah&CreatorName=Valra&CreatorType=Group&salesTypeFilter=1';
+const CHANGELOGS_ENDPOINT = '/static/json/changelogs.json';
 
 const RESTRICTION_LEVELS = [
     'None / No restrictions',
@@ -82,8 +94,167 @@ const APPEAL_STATUSES = [
 let standingCache = null;
 let topDonatorsCache = null;
 let ownedBordersCache = null;
+let changelogsCache = null;
 const priceCache = new Map();
 const artistCache = new Map();
+
+function renderChangelogRelease(release) {
+    release = release && typeof release === 'object' ? release : {};
+
+    const card = document.createElement('article');
+    card.className = 'rovalra-changelog-card';
+
+    const header = document.createElement('div');
+    header.className = 'rovalra-changelog-header';
+
+    const titleGroup = document.createElement('div');
+    titleGroup.className = 'rovalra-changelog-title-group';
+
+    const title = document.createElement('h3');
+    title.className = 'rovalra-changelog-title';
+    title.textContent = release.name || release.tag_name || 'Untitled release';
+
+    const dates = document.createElement('div');
+    dates.className = 'rovalra-changelog-dates';
+
+    if (release.published_date) {
+        const githubDate = document.createElement('span');
+        githubDate.textContent = `GitHub: ${release.published_date}`;
+        dates.appendChild(githubDate);
+    }
+
+    if (release.chrome_release_date) {
+        const chromeDate = document.createElement('span');
+        chromeDate.textContent = `Chrome: ${release.chrome_release_date}`;
+        dates.appendChild(chromeDate);
+    }
+
+    titleGroup.append(title, dates);
+
+    header.appendChild(titleGroup);
+
+    const body = document.createElement('div');
+    body.className = 'rovalra-changelog-body';
+    body.innerHTML =
+        parseUntrustedMarkdown(release.body, {
+            fullMarkdown: true,
+            githubMentions: true,
+        }) || 'No changelog notes were provided for this release.';
+
+    card.append(header, body);
+    return card;
+}
+
+async function getChangelogs() {
+    if (changelogsCache) return changelogsCache;
+
+    const response = await callRobloxApi({
+        subdomain: 'www',
+        endpoint: CHANGELOGS_ENDPOINT,
+        method: 'GET',
+        isRovalraApi: true,
+        noCache: true,
+    });
+
+    if (!response.ok) {
+        throw new Error(`Changelog request failed with ${response.status}`);
+    }
+
+    const data = await response.json();
+    changelogsCache = Array.isArray(data?.releases) ? data.releases : [];
+    return changelogsCache;
+}
+
+async function renderChangelogs(container) {
+    container.innerHTML = '';
+
+    const loading = document.createElement('div');
+    loading.className = 'rovalra-changelog-status';
+    loading.textContent = 'Loading changelogs...';
+    container.appendChild(loading);
+
+    try {
+        const releases = await getChangelogs();
+        container.innerHTML = '';
+
+        if (!releases.length) {
+            const empty = document.createElement('div');
+            empty.className = 'rovalra-changelog-status';
+            empty.textContent = 'No changelogs are available right now.';
+            container.appendChild(empty);
+            return;
+        }
+
+        releases.forEach((release) => {
+            container.appendChild(renderChangelogRelease(release));
+        });
+    } catch (error) {
+        console.warn('RoValra: Failed to load changelogs', error);
+        container.innerHTML = '';
+
+        const errorMessage = document.createElement('div');
+        errorMessage.className = 'rovalra-changelog-status';
+        errorMessage.textContent =
+            'Failed to load changelogs. Please try again later.';
+        container.appendChild(errorMessage);
+    }
+}
+
+async function getDonatorPerksDonationUrl(forceRefresh = false) {
+    try {
+        if (await isAuthenticatedUserUnder16OrNotAgeChecked(forceRefresh)) {
+            return DONATOR_PERKS_FALLBACK_ONSALE_URL;
+        }
+    } catch (error) {
+        console.warn(
+            'RoValra: Failed to check donator perks donation eligibility',
+            error,
+        );
+        return DONATOR_PERKS_FALLBACK_ONSALE_URL;
+    }
+
+    return DONATOR_PERKS_GAME_URL;
+}
+
+async function openDonatorPerksDonationUrl() {
+    try {
+        const popup = window.open('about:blank', '_blank');
+        if (popup) popup.opener = null;
+
+        const url = await getDonatorPerksDonationUrl(true);
+
+        if (popup) {
+            popup.location.href = url;
+        } else {
+            window.location.href = url;
+        }
+    } catch (error) {
+        console.warn('RoValra: Failed to open donation URL', error);
+        window.location.href = DONATOR_PERKS_FALLBACK_ONSALE_URL;
+    }
+}
+
+function renderDonatorPerksDonationButton(container = document) {
+    const holder = container.querySelector(
+        '#rovalra-donator-perks-donation-button-holder',
+    );
+    if (!holder || holder.dataset.rovalraDonationButtonRendered === 'true')
+        return;
+
+    holder.dataset.rovalraDonationButtonRendered = 'true';
+    holder.replaceChildren(
+        createSquareButton({
+            content: 'Donate',
+            id: 'rovalra-donator-perks-donation-button',
+            onClick: openDonatorPerksDonationUrl,
+            width: 'auto',
+            height: 'height-1000',
+            paddingX: 'padding-x-medium',
+            radius: 'radius-medium',
+            disableTextTruncation: true,
+        }),
+    );
+}
 
 function getUserProfileHref(userId) {
     return userId ? `https://www.roblox.com/users/${userId}/profile` : '';
@@ -91,7 +262,7 @@ function getUserProfileHref(userId) {
 
 function debounce(func, wait) {
     let timeout;
-    return function (...args) {
+    return function(...args) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
@@ -264,7 +435,7 @@ function createArtistCreditSection(artistId) {
                 const data = { name, thumb: thumbnails[0] };
                 artistCache.set(String(artistId), data);
                 applyData(data);
-            } catch (e) {}
+            } catch (e) { }
         })();
     }
 
@@ -443,7 +614,7 @@ async function openBorderOverlay(
             { position: 'top' },
         );
         actionBtn.onclick = async () => {
-            updateUserSettingViaApi('border', variant.link).catch(() => {});
+            updateUserSettingViaApi('border', variant.link).catch(() => { });
             updatePreviewAndUI(
                 variant.value,
                 variant.link,
@@ -501,28 +672,40 @@ function getBadgeStyle(key) {
         .join(';');
 }
 
-const donatorBadgeKeys = ['donator_1', 'donator_2', 'donator_3'];
-
-function getDonatorBadgesHtml() {
-    return donatorBadgeKeys
-        .map((key) => {
-            const badge = BADGE_CONFIG[key];
-            if (!badge) return '';
-            const styleString = getBadgeStyle(key);
-            const shortTooltip = badge.tooltip.split('.')[0];
-
-            return `
-            <div title="${badge.tooltip}" style="display: flex; align-items: center; gap: 10px; padding: 10px; background-color: var(--rovalra-container-background-color, rgba(0,0,0,0.1)); border-radius: 8px; flex: 1; min-width: 240px;">
-                <img src="${badge.icon}" style="width: 32px; height: 32px; ${styleString}" />
-                <span style="color: var(--rovalra-main-text-color); font-size: 14px;">${shortTooltip}</span>
-            </div>
-        `;
-        })
-        .join('');
+function getBadgeAssetAttribute(key) {
+    const badge = BADGE_CONFIG[key];
+    return badge?.iconAssetName
+        ? `data-rovalra-asset="${badge.iconAssetName}"`
+        : '';
 }
 
-function getFeaturesByTier(tier) {
-    const features = [];
+function getDonatorTierRewardHtml(tier) {
+    const key = `donator_${tier}`;
+    const badge = BADGE_CONFIG[key];
+    const rewardText = ts(`settings.donatorPerks.tier${tier}Reward`).replace(
+        /\n/g,
+        '<br>',
+    );
+
+    if (!badge) return rewardText;
+
+    return `<span style="display: inline-flex; align-items: center; gap: 6px; vertical-align: middle;"><span>${rewardText}</span><img ${getBadgeAssetAttribute(key)} src="${badge.icon}" alt="" style="width: 18px; height: 18px; flex-shrink: 0; ${getBadgeStyle(key)}" /></span>`;
+}
+
+function getDonatorTierHeaderHtml(tier) {
+    const key = `donator_${tier}`;
+    return `<span class="rovalra-donator-tier-table-heading">
+        <img ${getBadgeAssetAttribute(key)} src="${BADGE_CONFIG[key].icon}" alt="" style="${getBadgeStyle(key)}" />
+        <span>${ts(`settings.donatorPerks.tier${tier}`)}</span>
+    </span>`;
+}
+
+function createDonatorPerkLink(settingName, label) {
+    return `<a href="#!/search?q=${encodeURIComponent(settingName)}" class="rovalra-perk-link" data-setting="${settingName}">${label}</a>`;
+}
+
+function getDonatorSettingsPerkRows() {
+    const rows = [];
     for (const [categoryKey, category] of Object.entries(SETTINGS_CONFIG)) {
         const tabId = categoryKey.toLowerCase();
         if (tabId === 'info' || tabId === 'credits' || tabId === 'donatorperks')
@@ -531,99 +714,324 @@ function getFeaturesByTier(tier) {
         for (const [settingName, setting] of Object.entries(
             category.settings,
         )) {
-            if (setting.donatorTier === tier) {
-                features.push(
-                    `<li><a href="#!/search?q=${settingName}" class="rovalra-perk-link" data-setting="${settingName}" style="color: var(--rovalra-main-text-color); text-decoration: underline; cursor: pointer;">${setting.label}</a></li>`,
-                );
+            if (setting.donatorTier) {
+                rows.push({
+                    label: createDonatorPerkLink(settingName, setting.label),
+                    minTier: setting.donatorTier,
+                });
             }
             if (setting.childSettings) {
                 for (const [childName, childSetting] of Object.entries(
                     setting.childSettings,
                 )) {
-                    if (childSetting.donatorTier === tier) {
-                        features.push(
-                            `<li><a href="#!/search?q=${childName}" class="rovalra-perk-link" data-setting="${childName}" style="color: var(--rovalra-main-text-color); text-decoration: underline; cursor: pointer;">${childSetting.label}</a></li>`,
-                        );
+                    if (childSetting.donatorTier) {
+                        rows.push({
+                            label: createDonatorPerkLink(
+                                childName,
+                                childSetting.label,
+                            ),
+                            minTier: childSetting.donatorTier,
+                        });
                     }
                 }
             }
         }
     }
-    return features.length > 0
-        ? features.join('')
-        : `<li>${ts('settings.donatorPerks.moreComingSoon')}</li>`;
+    return rows;
+}
+
+function getDonatorPerkStatusCell(hasPerk) {
+    const label = hasPerk ? 'Included' : 'Not included';
+    return `<td class="rovalra-donator-perk-status-cell" aria-label="${label}" data-rovalra-donator-perk-included="${hasPerk ? 'true' : 'false'}"></td>`;
+}
+
+function renderDonatorPerkStatusPills(container) {
+    container
+        .querySelectorAll('[data-rovalra-donator-perk-included]')
+        .forEach((cell) => {
+            const isIncluded =
+                cell.dataset.rovalraDonatorPerkIncluded === 'true';
+            const label = isIncluded ? 'Included' : 'Not included';
+            const symbol = document.createElement('span');
+            symbol.className = "grow-0 shrink-0 basis-auto icon size-[var(--icon-size-small)] " + (isIncluded ? "icon-filled-circle-check" : "rovalra-icon-filled-circle-minus")
+
+            addTooltip(symbol, label, { position: 'top' })
+
+            cell.replaceChildren(symbol);
+        });
+}
+
+function getDonatorDiscordRolePerkHtml(tier) {
+    return `<span class="rovalra-donator-discord-role-perk">${ts(`settings.donatorPerks.tier${tier}DiscordRole`).replace(/\n/g, '<br>')}</span>`;
+}
+
+function getDonatorPerksComparisonHtml(themeColors) {
+    const baseRows = [
+        {
+            label: getDonatorTierRewardHtml(1),
+            minTier: 1,
+        },
+        {
+            label: getDonatorDiscordRolePerkHtml(1),
+            minTier: 1,
+        },
+        {
+            label: getDonatorTierRewardHtml(2),
+            minTier: 2,
+        },
+        {
+            label: getDonatorDiscordRolePerkHtml(2),
+            minTier: 2,
+        },
+        {
+            label: getDonatorTierRewardHtml(3),
+            minTier: 3,
+        },
+        {
+            label: getDonatorDiscordRolePerkHtml(3),
+            minTier: 3,
+        },
+    ];
+    const rows = [...baseRows, ...getDonatorSettingsPerkRows()];
+    const body =
+        rows.length > 0
+            ? rows
+                .map(
+                    ({ label, minTier }) => `
+                        <tr>
+                            <th scope="row">${label}</th>
+                            ${[1, 2, 3]
+                            .map((tier) =>
+                                getDonatorPerkStatusCell(tier >= minTier),
+                            )
+                            .join('')}
+                        </tr>`,
+                )
+                .join('')
+            : `<tr><th scope="row" colspan="4">${ts('settings.donatorPerks.moreComingSoon')}</th></tr>`;
+
+    return `
+        <div class="rovalra-donator-perks-compare" aria-label="${ts('settings.donatorPerks.perkTiers')}">
+            <div class="rovalra-donator-tier-summary">
+                ${[1, 2, 3]
+            .map(
+                (tier) => `
+                            <div id="donator-tier-${tier}-header" class="rovalra-donator-tier-heading">
+                                <img ${getBadgeAssetAttribute(`donator_${tier}`)} src="${BADGE_CONFIG[`donator_${tier}`].icon}" alt="" style="${getBadgeStyle(`donator_${tier}`)}" />
+                                <div class="rovalra-donator-tier-copy">
+                                    <h4>${ts(`settings.donatorPerks.tier${tier}`)}</h4>
+                                    <p>${parseMarkdown(ts(`settings.donatorPerks.tier${tier}Desc`), themeColors)}</p>
+                                </div>
+                            </div>`,
+            )
+            .join('')}
+            </div>
+            <div class="rovalra-donator-perks-table-wrap">
+                <table class="rovalra-donator-perks-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">${ts('settings.donatorPerks.perk')}</th>
+                            <th scope="col">${getDonatorTierHeaderHtml(1)}</th>
+                            <th scope="col">${getDonatorTierHeaderHtml(2)}</th>
+                            <th scope="col">${getDonatorTierHeaderHtml(3)}</th>
+                        </tr>
+                    </thead>
+                    <tbody>${body}</tbody>
+                </table>
+            </div>
+        </div>`;
 }
 
 let contributorsCache = null;
+let contributorsSortOrder = 'most';
 
-function renderContributors(container, users, thumbMap) {
-    container.innerHTML = '';
-    const listContainer = document.createElement('div');
-    listContainer.style.cssText =
-        'display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;';
+function getContributorContributionCounts() {
+    const counts = new Map(CONTRIBUTOR_USER_IDS.map((id) => [String(id), 0]));
 
-    CONTRIBUTOR_USER_IDS.forEach((id) => {
-        const user = users.find((u) => String(u.id) === String(id));
-        if (user) {
-            const thumbData = thumbMap.get(String(id));
+    const countSetting = (setting) => {
+        if (!setting) return;
 
-            const item = document.createElement('div');
-            item.className = 'rovalra-donator-card';
-            item.style.cssText = `display: flex; align-items: center; background-color: var(--rovalra-container-background-color, rgba(0,0,0,0.1)); padding: 8px 12px; border-radius: 8px; transition: background-color 0.2s;`;
-
-            const link = document.createElement('a');
-            link.className = 'avatar-card-link';
-            link.href = `https://www.roblox.com/users/${id}/profile`;
-            link.target = '_blank';
-            link.style.cssText = `display: flex; align-items: center; text-decoration: none; color: var(--rovalra-main-text-color); width: 100%;`;
-
-            const avatarContainer = document.createElement('div');
-            avatarContainer.className = 'avatar-card-image';
-            Object.assign(avatarContainer.style, {
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                marginRight: '10px',
-                overflow: 'hidden',
-                flexShrink: '0',
+        if (Array.isArray(setting.contributors)) {
+            new Set(setting.contributors.map(String)).forEach((id) => {
+                if (counts.has(id)) counts.set(id, counts.get(id) + 1);
             });
-
-            const thumbElement = createThumbnailElement(
-                thumbData,
-                user.displayName,
-                '',
-                {
-                    width: '100%',
-                    height: '100%',
-                    borderRadius: '50%',
-                },
-            );
-
-            const span = document.createElement('span');
-            span.textContent = user.displayName;
-            span.style.fontWeight = '500';
-
-            avatarContainer.appendChild(thumbElement);
-            link.appendChild(avatarContainer);
-            link.appendChild(span);
-            item.appendChild(link);
-            listContainer.appendChild(item);
         }
+
+        Object.values(setting.childSettings || {}).forEach(countSetting);
+    };
+
+    Object.values(SETTINGS_CONFIG).forEach((category) => {
+        Object.values(category.settings || {}).forEach(countSetting);
     });
 
-    container.appendChild(listContainer);
+    return counts;
+}
+
+const contributorContributionCounts = getContributorContributionCounts();
+
+function addContributorTooltip(link, id) {
+    const tooltipKey = `settings.credits.contributorTooltips.${id}`;
+    const tooltipText = ts(tooltipKey);
+    if (!tooltipText || tooltipText === tooltipKey) return;
+
+    addTooltip(link, tooltipText, {
+        position: 'top',
+    });
+}
+
+function createContributorProfile(user, thumbData) {
+    const profile = document.createElement('div');
+    profile.className = 'rovalra-contributor-profile';
+
+    const avatarContainer = document.createElement('div');
+    avatarContainer.className = 'avatar-card-image';
+    Object.assign(avatarContainer.style, {
+        width: '32px',
+        height: '32px',
+        borderRadius: '50%',
+        marginRight: '10px',
+        overflow: 'hidden',
+        flexShrink: '0',
+    });
+
+    const thumbElement = createThumbnailElement(
+        thumbData,
+        user.displayName,
+        '',
+        {
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+        },
+    );
+
+    const name = document.createElement('span');
+    name.className = 'rovalra-contributor-name';
+    name.textContent = user.displayName;
+
+    avatarContainer.appendChild(thumbElement);
+    profile.append(avatarContainer, name);
+
+    return profile;
+}
+
+function renderContributors(container, users, thumbMap) {
+    container.replaceChildren();
+
+    const contributors = CONTRIBUTOR_USER_IDS.map((id, index) => {
+        const stringId = String(id);
+        return {
+            id: stringId,
+            index,
+            user: users.find((u) => String(u.id) === stringId),
+            contributionCount: contributorContributionCounts.get(stringId) || 0,
+        };
+    }).filter(({ user }) => user);
+
+    const featureContributors = contributors
+        .filter(({ contributionCount }) => contributionCount > 0)
+        .sort((a, b) => {
+            const countSort =
+                contributorsSortOrder === 'least'
+                    ? a.contributionCount - b.contributionCount
+                    : b.contributionCount - a.contributionCount;
+            return countSort || a.index - b.index;
+        });
+    const backendContributors = contributors.filter(
+        ({ contributionCount }) => contributionCount === 0,
+    );
+
+    const sortBar = document.createElement('div');
+    sortBar.className = 'rovalra-contributors-toolbar';
+
+    const sortLabel = document.createElement('span');
+    sortLabel.className = 'rovalra-contributors-sort-label';
+    sortLabel.textContent = ts('settings.credits.sortLabel');
+
+    const sortToggle = createPillToggle({
+        options: [
+            {
+                text: ts('settings.credits.sortMost'),
+                value: 'most',
+            },
+            {
+                text: ts('settings.credits.sortLeast'),
+                value: 'least',
+            },
+        ],
+        initialValue: contributorsSortOrder,
+        onChange: (value) => {
+            contributorsSortOrder = value;
+            renderContributors(container, users, thumbMap);
+        },
+    });
+
+    sortBar.append(sortLabel, sortToggle);
+
+    const listContainer = document.createElement('ol');
+    listContainer.className = 'rovalra-contributors-list';
+
+    featureContributors.forEach(({ id, user, contributionCount }) => {
+        const item = document.createElement('li');
+        item.className = 'rovalra-contributors-item';
+
+        const link = document.createElement('a');
+        link.className =
+            'avatar-card-link rovalra-donator-card rovalra-contributor-row';
+        link.href = `https://www.roblox.com/users/${id}/profile`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        addContributorTooltip(link, id);
+
+        const count = document.createElement('span');
+        count.className = 'rovalra-contributor-count';
+        count.textContent = ts('settings.credits.contributionCount', {
+            count: contributionCount,
+        });
+
+        link.append(
+            createContributorProfile(user, thumbMap.get(String(id))),
+            count,
+        );
+        item.appendChild(link);
+        listContainer.appendChild(item);
+    });
+
+    container.append(sortBar, listContainer);
+
+    if (backendContributors.length === 0) return;
+
+    const backendNote = document.createElement('p');
+    backendNote.className = 'rovalra-backend-contributors-note';
+    backendNote.textContent = ts('settings.credits.backendContributorsNote');
+
+    const backendList = document.createElement('div');
+    backendList.className = 'rovalra-backend-contributors-list';
+
+    backendContributors.forEach(({ id, user }) => {
+        const link = document.createElement('a');
+        link.className =
+            'avatar-card-link rovalra-donator-card rovalra-backend-contributor-card';
+        link.href = `https://www.roblox.com/users/${id}/profile`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        addContributorTooltip(link, id);
+
+        link.appendChild(createContributorProfile(user, thumbMap.get(id)));
+        backendList.appendChild(link);
+    });
+
+    container.append(backendNote, backendList);
 }
 
 function renderContributorsShimmer(container) {
-    container.innerHTML = '';
-    const listContainer = document.createElement('div');
-    listContainer.style.cssText =
-        'display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;';
+    container.replaceChildren();
+    const listContainer = document.createElement('ol');
+    listContainer.className = 'rovalra-contributors-list';
 
     CONTRIBUTOR_USER_IDS.forEach(() => {
-        const item = document.createElement('div');
-        item.className = 'rovalra-donator-card';
-        item.style.cssText = `display: flex; align-items: center; background-color: var(--rovalra-container-background-color, rgba(0,0,0,0.1)); padding: 8px 12px; border-radius: 8px; opacity: 0.7;`;
+        const item = document.createElement('li');
+        item.className = 'rovalra-donator-card rovalra-contributor-loading-row';
 
         const avatarContainer = document.createElement('div');
         avatarContainer.className = 'avatar-card-image';
@@ -703,7 +1111,10 @@ async function loadContributors() {
         renderContributors(container, users, thumbMap);
     } catch (err) {
         console.error('RoValra: Error loading contributors', err);
-        container.innerHTML = `<p style="color: var(--rovalra-secondary-text-color);">${ts('settings.credits.failedToLoadContributors')}</p>`;
+        const error = document.createElement('p');
+        error.className = 'rovalra-contributors-error';
+        error.textContent = ts('settings.credits.failedToLoadContributors');
+        container.replaceChildren(error);
     }
 }
 
@@ -768,30 +1179,30 @@ function renderTopDonators(container, donators, thumbMap, currentUserId) {
         const podiumData = [
             donators[2]
                 ? {
-                      ...donators[2],
-                      rank: 3,
-                      color: '#cd7f32',
-                      height: '60px',
-                      size: '64px',
-                  }
+                    ...donators[2],
+                    rank: 3,
+                    color: '#cd7f32',
+                    height: '60px',
+                    size: '64px',
+                }
                 : null,
             donators[0]
                 ? {
-                      ...donators[0],
-                      rank: 1,
-                      color: '#ffd700',
-                      height: '100px',
-                      size: '80px',
-                  }
+                    ...donators[0],
+                    rank: 1,
+                    color: '#ffd700',
+                    height: '100px',
+                    size: '80px',
+                }
                 : null,
             donators[1]
                 ? {
-                      ...donators[1],
-                      rank: 2,
-                      color: '#c0c0c0',
-                      height: '80px',
-                      size: '72px',
-                  }
+                    ...donators[1],
+                    rank: 2,
+                    color: '#c0c0c0',
+                    height: '80px',
+                    size: '72px',
+                }
                 : null,
         ].filter(Boolean);
 
@@ -1185,8 +1596,8 @@ async function loadTopDonators() {
         const enrichedDonators = donators.map((donator) => ({
             ...donator,
             username:
-                profileMap.get(String(donator.user_id))?.names
-                    ?.combinedName || donator.username,
+                profileMap.get(String(donator.user_id))?.names?.combinedName ||
+                donator.username,
             isVerified:
                 String(donator.user_id) !== '1' &&
                 profileMap.get(String(donator.user_id))?.isVerified === true,
@@ -1297,8 +1708,6 @@ export const buttonData = [
                         <p>${ts('settings.info.desc3')}</p>
                         <div style="margin-top: 5px;">
                             <p>${ts('settings.info.desc4')}</p>
-                            <div style="margin-top: 5px;">
-                                <p>${ts('settings.info.gilbert')}</p>
                                 <div style="margin-top: 5px;">
                                     <p>${ts('settings.info.suggestions')}</p>
                                     <div style="margin-top: 5px;">
@@ -1310,9 +1719,9 @@ export const buttonData = [
                                             <a href="https://discord.gg/GHd5cSKJRk" target="_blank" class="rovalra-discord-link">${ts('settings.info.discord')}</a>
                                             <a href="https://github.com/NotValra/RoValra" target="_blank" class="rovalra-github-link">
                                                 ${ts('settings.info.github')}
-                                                <img src="${assets.rovalraIcon}" style="width: 20px; height: 20px; margin-right: 0px; vertical-align: middle;" />
+                                                <img data-rovalra-asset="rovalraIcon" src="${assets.rovalraIcon}" style="width: 20px; height: 20px; margin-right: 0px; vertical-align: middle;" />
                                             </a>
-                                            <a href="https://www.roblox.com/games/store-section/9452973012" target="_blank" class="rovalra-roblox-link">${ts('settings.info.support')}</a>
+                                            <a href="https://www.roblox.com/my/account?rovalra=donator+perks" class="rovalra-roblox-link">${ts('settings.info.support')}</a>
                                             <a href="https://www.tiktok.com/@valrawantbanana" target="_blank" class="rovalra-tiktok-link">${ts('settings.info.tiktok')}</a>
                                             <a href="https://x.com/ValraSwag" target="_blank" class="rovalra-x-link">${ts('settings.info.x')}</a>
                                         </div>
@@ -1334,42 +1743,11 @@ export const buttonData = [
         get content() {
             return `
             <div style="padding: 8px;">
-                <h2 style="margin-bottom: 10px; color: var(--rovalra-main-text-color) !important;">${ts('settings.credits.title')}</h2>
-                <ul style="margin-top: 10px; padding-left: 0px; color: var(--rovalra-secondary-text-color);">
-                    <li style="margin-bottom: 8px; list-style-type: disc; margin-left: 20px;">
-                        ${ts('settings.credits.firefoxPort')}
-                        <a href="https://github.com/8prct/rovalra-firefox-fork" target="_blank" class="rovalra-github-link">GitHub</a>
-                    </li>
-                    <li style="margin-bottom: 8px; list-style-type: disc; margin-left: 20px;">
-                        ${ts('settings.credits.frames')}
-                        <a href="https://github.com/workframes/roblox-owner-counts" target="_blank" class="rovalra-github-link">${ts('settings.info.github')}</a>
-                    </li>
-                    <li style="margin-bottom: 8px; list-style-type: disc; margin-left: 20px;">
-                        ${ts('settings.credits.julia')}
-                        <a href="https://github.com/RoSeal-Extension/Top-Secret-Thing" target="_blank" class="rovalra-github-link">${ts('settings.info.github')}</a>
-                    </li>
-                    <li style="margin-bottom: 8px; list-style-type: disc; margin-left: 20px;">
-                         ${ts('settings.credits.aspect')}
-                         <a href="https://github.com/Aspectise" target="_blank" class="rovalra-github-link">GitHub</a>
-                    </li>
-                    <li style="margin-bottom: 8px; list-style-type: disc; margin-left: 20px;">
-                         ${ts('settings.credits.l5se')}
-                    </li>
-                    <li style="margin-bottom: 8px; list-style-type: disc; margin-left: 20px;">
-                        ${ts('settings.credits.lz')}
-                    </li>
-                    <li style="margin-bottom: 8px; list-style-type: disc; margin-left: 20px;">
-                        ${ts('settings.credits.mmfw')}
-                    </li>
-                    <li style="margin-bottom: 8px; list-style-type: disc; margin-left: 20px;">
-                        ${ts('settings.credits.coweggs')}
-                    </li>
-                    <li style="margin-bottom: 8px; list-style-type: disc; margin-left: 20px;">
-                        ${ts('settings.credits.woozynate')}
-                    </li>
-                </ul>
-
-                <h3 style="margin-top: 25px; margin-bottom: 10px; color: var(--rovalra-main-text-color); font-size: 18px;">${ts('settings.credits.contributorsTitle')}</h3>
+                <p style="margin-bottom: 12px; color: var(--rovalra-secondary-text-color);">
+                    ${ts('settings.credits.firefoxPort')}
+                    <a href="https://github.com/8prct/rovalra-firefox-fork" target="_blank" class="rovalra-github-link">GitHub</a>
+                </p>
+                <h2 style="margin-bottom: 10px; color: var(--rovalra-main-text-color) !important;">${ts('settings.credits.contributorsTitle')}</h2>
                 <div id="rovalra-contributors-list"></div>
             </div>`;
         },
@@ -1387,67 +1765,27 @@ export const buttonData = [
             <div style="padding: 8px;">
                 <h2 style="margin-bottom: 10px; color: var(--rovalra-main-text-color) !important;">${ts('settings.donatorPerks.title')}</h2>
                 <p>${ts('settings.donatorPerks.subtitle')}</p>
-                
+
                 <div style="margin-top: 15px; font-size: 13px; color: var(--rovalra-secondary-text-color);">
                     ${parseMarkdown(ts('settings.donatorPerks.note'), themeColors)}
                 </div>
 
-                <div style="margin-top: 15px;">
-                    <h3 style="color: var(--rovalra-main-text-color); margin-bottom: 5px; font-size: 18px;">${ts('settings.donatorPerks.howToGet')}</h3>
-                    <p>${ts('settings.donatorPerks.howToGetDesc')}</p>
-                    <div style="margin-top: 10px;">
-                        <a href="https://www.roblox.com/games/store-section/9452973012" target="_blank" class="rovalra-roblox-link">${ts('settings.donatorPerks.goToGame')}</a>
+                <div style="margin-top: 15px; padding: 15px; background-color: var(--rovalra-container-background-color, rgba(0,0,0,0.1)); border-radius: 8px; border: 1px solid var(--rovalra-border-color, rgba(128,128,128,0.2)); display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap;">
+                    <div style="min-width: 220px; flex: 1; display: flex; align-items: center; gap: 14px;">
+                        <img data-rovalra-asset="rovalraIcon" src="${assets.rovalraIcon}" alt="" style="width: 52px; height: 52px; flex-shrink: 0;" />
+                        <div>
+                            <h3 style="color: var(--rovalra-main-text-color); margin: 0 0 5px 0; font-size: 18px;">Help Support RoValra</h3>
+                            <p style="color: var(--rovalra-secondary-text-color); margin: 0; font-size: 14px;">Get exclusive cosmetic perks by donating</p>
+                        </div>
+                    </div>
+                    <div style="flex-shrink: 0;">
+                        <div id="rovalra-donator-perks-donation-button-holder"></div>
                     </div>
                 </div>
 
                 <div style="margin-top: 10px;">
                     <h3 style="color: var(--rovalra-main-text-color); margin-bottom: 10px; font-size: 18px;">${ts('settings.donatorPerks.perkTiers')}</h3>
-                    <div style="display: flex; flex-direction: column; gap: 15px;">
-                        <div style="padding: 15px; background-color: var(--rovalra-container-background-color, rgba(0,0,0,0.1)); border-radius: 8px; border: 1px solid var(--rovalra-border-color, rgba(128,128,128,0.2));">
-                            <div id="donator-tier-1-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                                <img src="${BADGE_CONFIG.donator_1.icon}" style="width: 32px; height: 32px; ${getBadgeStyle('donator_1')}" />
-                                <h4 style="color: var(--rovalra-main-text-color); margin: 0; font-size: 16px;">${ts('settings.donatorPerks.tier1')}</h4>
-                            </div>
-                            <div style="color: var(--rovalra-secondary-text-color); font-size: 14px;">${parseMarkdown(ts('settings.donatorPerks.tier1Desc'), themeColors)}</div>
-                            <ul style="margin-top: 5px; padding-left: 20px; color: var(--rovalra-secondary-text-color); margin-bottom: 0;">
-                                <li>${ts('settings.donatorPerks.tier1Reward').replace(/\n/g, '<br>')}</li>
-                                ${getFeaturesByTier(1)}
-                            </ul>
-                        </div>
-
-                        <div style="padding: 15px; background-color: var(--rovalra-container-background-color, rgba(0,0,0,0.1)); border-radius: 8px; border: 1px solid var(--rovalra-border-color, rgba(128,128,128,0.2));">
-                            <div id="donator-tier-2-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                                <img src="${BADGE_CONFIG.donator_2.icon}" style="width: 32px; height: 32px; ${getBadgeStyle('donator_2')}" />
-                                <h4 style="color: var(--rovalra-main-text-color); margin: 0; font-size: 16px;">${ts('settings.donatorPerks.tier2')}</h4>
-                            </div>
-                            <div style="color: var(--rovalra-secondary-text-color); font-size: 14px;">${parseMarkdown(ts('settings.donatorPerks.tier2Desc'), themeColors)}</div>
-                            <ul style="margin-top: 5px; padding-left: 20px; color: var(--rovalra-secondary-text-color); margin-bottom: 0;">
-                                <li>${ts('settings.donatorPerks.tier2Reward').replace(/\n/g, '<br>')}</li>
-                                <li>${ts('settings.donatorPerks.previousRewards').replace(/\n/g, '<br>')}</li>
-                                ${getFeaturesByTier(2)}
-                            </ul>
-                        </div>
-
-                        <div style="padding: 15px; background-color: var(--rovalra-container-background-color, rgba(0,0,0,0.1)); border-radius: 8px; border: 1px solid var(--rovalra-border-color, rgba(128,128,128,0.2));">
-                            <div id="donator-tier-3-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                                <img src="${BADGE_CONFIG.donator_3.icon}" style="width: 32px; height: 32px; ${getBadgeStyle('donator_3')}" />
-                                <h4 style="color: var(--rovalra-main-text-color); margin: 0; font-size: 16px;">${ts('settings.donatorPerks.tier3')}</h4>
-                            </div>
-                            <div style="color: var(--rovalra-secondary-text-color); font-size: 14px;">${parseMarkdown(ts('settings.donatorPerks.tier3Desc'), themeColors)}</div>
-                            <ul style="margin-top: 5px; padding-left: 20px; color: var(--rovalra-secondary-text-color); margin-bottom: 0;">
-                                <li>${ts('settings.donatorPerks.tier3Reward').replace(/\n/g, '<br>')}</li>
-                                <li>${ts('settings.donatorPerks.previousRewards').replace(/\n/g, '<br>')}</li>
-                                ${getFeaturesByTier(3)}
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div style="margin-top: 20px;">
-                    <h3 style="color: var(--rovalra-main-text-color); margin-bottom: 10px; font-size: 18px;">${ts('settings.donatorPerks.availableBadges')}</h3>
-                    <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: stretch;">
-                        ${getDonatorBadgesHtml()}
-                    </div>
+                    ${getDonatorPerksComparisonHtml(themeColors)}
                 </div>
 
                 <div style="margin-top: 25px;">
@@ -1471,6 +1809,19 @@ export const buttonData = [
                 <h2 style="margin-bottom: 15px; color: var(--rovalra-main-text-color) !important;">Avatar Border Store</h2>
                 <p style="color: var(--rovalra-secondary-text-color); margin-bottom: 20px;">Avatar border store, buy avatar borders to directly support RoValra and the artists, <strong>Donator tier 3 gets all avatar borders for free.</strong> Buying Avatar Borders counts towards your Donator Tier!</p>
                 <div id="rovalra-store-border-container" style="color: var(--rovalra-secondary-text-color);">Loading borders...</div>
+            </div>`;
+        },
+    },
+    {
+        id: 'changelogs',
+        get text() {
+            return 'Changelogs';
+        },
+        get content() {
+            return `
+            <div style="padding: 8px;">
+                <h2 style="margin-bottom: 15px; color: var(--rovalra-main-text-color) !important;">Changelogs</h2>
+                <div id="rovalra-changelogs-container" style="color: var(--rovalra-secondary-text-color);">Loading changelogs...</div>
             </div>`;
         },
     },
@@ -1610,14 +1961,14 @@ async function renderAccountStanding(container) {
             <div style="height: 12px; background: rgba(128,128,128,0.2); border-radius: 6px; position: relative; margin-bottom: 25px;">
                 <div class="standing-status-fill" style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: #23a55a; border-radius: 6px; transition: width 0.5s ease, background-color 0.3s;"></div>
                 ${levels
-                    .map((level, index) => {
-                        const leftPos = (index / (levels.length - 1)) * 100;
-                        return `
+            .map((level, index) => {
+                const leftPos = (index / (levels.length - 1)) * 100;
+                return `
                         <div class="standing-status-dot" data-index="${index}" style="position: absolute; left: ${leftPos}%; top: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; border-radius: 50%; background: ${index === 0 ? level.color : '#4f545c'}; border: 4px solid var(--rovalra-container-background-color); z-index: 2; transition: background 0.3s;"></div>
                         <div class="standing-status-label" data-index="${index}" style="font-size: 12px; font-weight: 600; color: ${index === 0 ? 'var(--rovalra-main-text-color)' : 'var(--rovalra-secondary-text-color)'}; opacity: ${index === 0 ? '1' : '0.5'}; text-align: center; width: 60px; margin-left: -30px; position: absolute; left: ${leftPos}%; margin-top: 15px; transition: color 0.3s, opacity 0.3s;">${level.label}</div>
                     `;
-                    })
-                    .join('')}
+            })
+            .join('')}
             </div>
         </div>
         <div class="standing-policy-anchor"></div>
@@ -1705,11 +2056,11 @@ function updateAccountStandingUI(discordCard, data, levels) {
                 <div style="color: #f23f43; font-weight: 600; font-size: 13px; margin-bottom: 8px;">Disabled Features</div>
                 <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                     ${disabledFeatures
-                        .map(
-                            (feature) =>
-                                `<div style="background: rgba(242, 63, 67, 0.1); padding: 4px 10px; border-radius: 6px; color: #f23f43; font-size: 11px; font-weight: 600; text-transform: capitalize;">${feature}</div>`,
-                        )
-                        .join('')}
+                    .map(
+                        (feature) =>
+                            `<div style="background: rgba(242, 63, 67, 0.1); padding: 4px 10px; border-radius: 6px; color: #f23f43; font-size: 11px; font-weight: 600; text-transform: capitalize;">${feature}</div>`,
+                    )
+                    .join('')}
                 </div>
             </div>`
                 : '';
@@ -1720,15 +2071,15 @@ function updateAccountStandingUI(discordCard, data, levels) {
                 <div style="color: #f23f43; font-weight: 600; font-size: 13px; margin-bottom: 8px;">Moderated Content</div>
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                     ${modContent
-                        .map(
-                            (item) => `
+                    .map(
+                        (item) => `
                         <div style="background: rgba(0,0,0,0.1); padding: 8px; border-radius: 8px;">
                             <div style="font-weight: 600; color: var(--rovalra-secondary-text-color); font-size: 12px; margin-bottom: 4px;">${item.config_key}</div>
                             <div style="font-size: 13px; color: var(--rovalra-main-text-color); word-break: break-all;">${item.content_value}</div>
                         </div>
                     `,
-                        )
-                        .join('')}
+                    )
+                    .join('')}
                 </div>
             </div>`
                 : '';
@@ -1770,7 +2121,7 @@ function updateAccountStandingUI(discordCard, data, levels) {
             appealSection.innerHTML = DOMPurify.sanitize(`
                 <div style="font-size: 14px; font-weight: 600; color: var(--rovalra-secondary-text-color); margin-bottom: 8px;">Appeal Case</div>
                 <div style="font-size: 14px; color: var(--rovalra-main-text-color); margin-bottom: 12px;">Status: <strong style="color: ${statusColor};">${APPEAL_STATUSES[data.appeal.appeal_status]}</strong></div>
-                
+
                 <div style="margin-bottom: 10px;">
                     <div style="font-size: 13px; font-weight: 600; color: var(--rovalra-secondary-text-color); margin-bottom: 2px;">Your Message</div>
                     <div style="font-size: 13px; color: var(--rovalra-main-text-color); opacity: 0.9;">${data.appeal.appeal_message || 'N/A'}</div>
@@ -1860,6 +2211,10 @@ function findBorderItem(categories, value) {
         }
     }
     return null;
+}
+
+function isNewBorderCategory(category) {
+    return category?.new === true;
 }
 
 async function renderStoreBorders(container) {
@@ -2022,8 +2377,53 @@ async function renderStoreBorders(container) {
                 '<p style="color: var(--rovalra-secondary-text-color);">Sign in to preview borders on your avatar.</p>';
         }
 
-        for (const category of borderCategories) {
-            if (category.value === 'none' || !category.variants) continue;
+        const visibleCategories = borderCategories.filter(
+            (category) => category.value !== 'none' && category.variants,
+        );
+        const storeSections = [];
+        const emptyTabMessage = document.createElement('p');
+        emptyTabMessage.style.cssText =
+            'color: var(--rovalra-secondary-text-color); margin: 16px 0 0 0;';
+        emptyTabMessage.textContent = 'No borders found in this tab.';
+        emptyTabMessage.hidden = true;
+
+        const setStoreTab = (tab) => {
+            let visibleCount = 0;
+            for (const section of storeSections) {
+                const isVisible =
+                    tab === 'all' ||
+                    (tab === 'new' && section.isNew) ||
+                    tab === section.categoryValue;
+
+                section.header.style.display = isVisible ? '' : 'none';
+                section.grid.style.display = isVisible ? 'grid' : 'none';
+                if (isVisible) visibleCount += 1;
+            }
+            emptyTabMessage.hidden = visibleCount > 0;
+        };
+
+        const tabControls = document.createElement('div');
+        tabControls.style.cssText =
+            'display: flex; justify-content: flex-start; margin: 0 0 16px 0; overflow-x: auto; max-width: 100%;';
+        const storeTabs = createPillToggle({
+            options: [
+                { text: 'All', value: 'all' },
+                { text: 'New', value: 'new' },
+                ...visibleCategories.map((category) => ({
+                    text: category.label,
+                    value: category.value,
+                })),
+            ],
+            initialValue: 'all',
+            onChange: setStoreTab,
+        });
+        storeTabs.style.flexWrap = 'wrap';
+        storeTabs.style.maxWidth = '100%';
+        tabControls.appendChild(storeTabs);
+        container.append(tabControls, emptyTabMessage);
+
+        for (const category of visibleCategories) {
+            const categoryIsNew = isNewBorderCategory(category);
 
             const categoryHeader = document.createElement('h3');
             categoryHeader.style.cssText =
@@ -2035,6 +2435,12 @@ async function renderStoreBorders(container) {
             variantsGrid.style.cssText =
                 'display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 10px; align-items: flex-start;';
             container.appendChild(variantsGrid);
+            storeSections.push({
+                categoryValue: category.value,
+                isNew: categoryIsNew,
+                header: categoryHeader,
+                grid: variantsGrid,
+            });
 
             const tier = getCurrentUserTier();
 
@@ -2266,6 +2672,7 @@ async function renderStoreBorders(container) {
                 );
             }
         }
+        setStoreTab('all');
     } catch (error) {
         console.error('RoValra: Failed to render store borders', error);
         container.innerHTML =
@@ -2291,8 +2698,8 @@ function createEquipButton(
     const tooltip = isSelected
         ? 'Click to unequip this border'
         : isOwned
-          ? 'Equip this border'
-          : 'Buy this border';
+            ? 'Equip this border'
+            : 'Buy this border';
 
     const pill = createPill(text, tooltip, { isButton: true });
     pill.setAttribute('data-equip-btn', variant.value);
@@ -2315,11 +2722,11 @@ function createEquipButton(
         const val = pill.getAttribute('data-equip-btn');
 
         if (currentText === 'Equipped') {
-            updateUserSettingViaApi('border', '').catch(() => {});
+            updateUserSettingViaApi('border', '').catch(() => { });
             updatePreviewAndUI('none', null, container, previewHolder);
         } else if (currentText === 'Equip') {
             const link = pill.getAttribute('data-variant-link');
-            updateUserSettingViaApi('border', link).catch(() => {});
+            updateUserSettingViaApi('border', link).catch(() => { });
             updatePreviewAndUI(val, link, container, previewHolder);
         } else if (currentText === 'Buy') {
             openBorderOverlay(
@@ -2446,15 +2853,16 @@ export async function updateContent(buttonInfo, contentContainer) {
         buttonId === 'credits' ||
         buttonId === 'accountStanding' ||
         buttonId === 'donatorPerks' ||
-        buttonId === 'store'
+        buttonId === 'store' ||
+        buttonId === 'changelogs'
     ) {
         ((contentContainer.innerHTML = `
-            <div id="settings-content" style="padding: 0; background-color: transparent !important;"> 
-                <div id="setting-section-content" style="padding: 5px;"> 
+            <div id="settings-content" style="padding: 0; background-color: transparent !important;">
+                <div id="setting-section-content" style="padding: 5px;">
                     <div id="info-credits-background-wrapper" class="setting" style="margin-bottom: 15px;">
                         ${buttonInfo.content}
-                    </div> 
-                </div> 
+                    </div>
+                </div>
                 </div>`), //verified
             sanitizeConfig);
     } else {
@@ -2487,6 +2895,9 @@ export async function updateContent(buttonInfo, contentContainer) {
     }
 
     if (buttonId === 'donatorPerks') {
+        renderDonatorPerksDonationButton(contentContainer);
+        renderDonatorPerkStatusPills(contentContainer);
+
         const badgesResponse = await syncDonatorTier();
         const userTier = getCurrentUserTier();
         if (userTier > 0) {
@@ -2505,15 +2916,18 @@ export async function updateContent(buttonInfo, contentContainer) {
                         `#donator-tier-${userTier}-header`,
                     );
                     if (tierContainer) {
+                        const tierCopy = tierContainer.querySelector(
+                            '.rovalra-donator-tier-copy',
+                        );
                         const tierBadge = document.createElement('span');
                         tierBadge.dataset.rovalraSkipUsdEstimate = 'true';
                         tierBadge.style.cssText =
-                            'margin-left: auto; display: inline-flex; align-items: center; gap: 8px; background-color: var(--rovalra-container-background-color, rgba(0,0,0,0.1)); padding: 4px 10px 4px 4px; border-radius: 20px; border: 1px solid var(--rovalra-border-color); color: var(--rovalra-main-text-color); white-space: nowrap;';
+                            'margin-top: 6px; display: inline-flex; align-items: center; gap: 5px; background-color: var(--rovalra-container-background-color, rgba(0,0,0,0.1)); padding: 2px 7px 2px 2px; border-radius: 16px; border: 1px solid var(--rovalra-border-color); color: var(--rovalra-main-text-color); white-space: nowrap; width: fit-content;';
 
                         const img = document.createElement('img');
                         img.src = userThumbUrl;
                         img.style.cssText =
-                            'width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;';
+                            'width: 19px; height: 19px; border-radius: 50%; flex-shrink: 0;';
                         tierBadge.appendChild(img);
 
                         const totalDonated =
@@ -2528,7 +2942,7 @@ export async function updateContent(buttonInfo, contentContainer) {
                             robuxIcon.style.marginRight = '2px';
                             donationTotal.append(robuxIcon, totalDonatedLabel);
                             donationTotal.style.cssText =
-                                'display: inline-flex; align-items: center; gap: 2px; color: var(--rovalra-main-text-color); font-size: 12px; font-weight: 700;';
+                                'display: inline-flex; align-items: center; gap: 1px; color: var(--rovalra-main-text-color); font-size: 11px; font-weight: 700;';
                             tierBadge.appendChild(donationTotal);
                         }
                         addTooltip(
@@ -2538,7 +2952,7 @@ export async function updateContent(buttonInfo, contentContainer) {
                                 : 'Your donator tier',
                             { position: 'top' },
                         );
-                        tierContainer.appendChild(tierBadge);
+                        (tierCopy || tierContainer).appendChild(tierBadge);
                     }
                 }
             }
@@ -2553,6 +2967,15 @@ export async function updateContent(buttonInfo, contentContainer) {
         );
         if (borderContainer) {
             renderStoreBorders(borderContainer);
+        }
+    }
+
+    if (buttonId === 'changelogs') {
+        const changelogsContainer = contentContainer.querySelector(
+            '#rovalra-changelogs-container',
+        );
+        if (changelogsContainer) {
+            renderChangelogs(changelogsContainer);
         }
     }
 
@@ -2615,6 +3038,8 @@ export async function handleSearch(event) {
         for (const [settingName, settingDef] of Object.entries(
             category.settings,
         )) {
+            if (settingDef.hidden) continue;
+
             const label = (
                 Array.isArray(settingDef.label)
                     ? settingDef.label.join(' ')
@@ -2644,6 +3069,8 @@ export async function handleSearch(event) {
                 for (const [childName, childDef] of Object.entries(
                     settingDef.childSettings,
                 )) {
+                    if (childDef.hidden) continue;
+
                     const childLabel = (
                         Array.isArray(childDef.label)
                             ? childDef.label.join(' ')
@@ -2933,7 +3360,7 @@ function initializeHeartbeatSpoofer() {
         }
     });
 
-    window.fetch = async function (...args) {
+    window.fetch = async function(...args) {
         const url = args[0] ? args[0].toString() : '';
         let isInternal = false;
 

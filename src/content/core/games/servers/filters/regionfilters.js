@@ -10,7 +10,7 @@ import {
     getStateCodeFromRegion,
 } from '../../../regions.js';
 import { createButton } from '../../../ui/buttons.js';
-import { showReviewPopup } from '../../../review/review.js';
+import { showRegionDonationPopup } from '../../../review/review.js';
 import DOMPurify from 'dompurify';
 
 const DEFAULT_PLACE_ID = window.ROVALRA_PLACE_ID;
@@ -414,7 +414,7 @@ function createGlobePanel(container) {
     const panel = document.createElement('div');
     panel.id = GLOBE_PANEL_ID;
     panel.className = theme;
-    panel.innerHTML = `<div class="rovalra-globe-header ${theme}"><img src="${assets.rovalraIcon}" class="rovalra-header-logo" title="RoValra" id="${EASTER_EGG_TRIGGER_ID}" alt="Logo"><div id="${HEADER_TITLE_ID}" style="font-weight:bold;">RoValra Region Selector</div></div><div id="${GLOBE_CONTAINER_ID}"></div>`;
+    panel.innerHTML = `<div class="rovalra-globe-header ${theme}"><img data-rovalra-asset="rovalraIcon" src="${assets.rovalraIcon}" class="rovalra-header-logo" title="RoValra" id="${EASTER_EGG_TRIGGER_ID}" alt="Logo"><div id="${HEADER_TITLE_ID}" style="font-weight:bold;">RoValra Region Selector</div></div><div id="${GLOBE_CONTAINER_ID}"></div>`;
     container.appendChild(panel);
 
     const globeContainer = panel.querySelector(`#${GLOBE_CONTAINER_ID}`);
@@ -688,7 +688,7 @@ async function getAndCacheServerRegion(server, placeId) {
     try {
         const res = await callRobloxApiJson({
             subdomain: 'gamejoin',
-            endpoint: '/v1/join-game-instance',
+            endpoint: '/v2/join-game-instance',
             method: 'POST',
             body: {
                 placeId: parseInt(placeId, 10),
@@ -807,7 +807,7 @@ async function onRegionSelected(event) {
     const code = event.detail?.regionCode;
     if (!code) return;
 
-    showReviewPopup('region_filters');
+    showRegionDonationPopup('region_filters');
     closeGlobalPanels();
     delete State.regionServersCache[code];
 

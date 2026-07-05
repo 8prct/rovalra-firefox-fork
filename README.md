@@ -1,30 +1,18 @@
 ## RoValra Firefox / Zen port by 8prct
 
-This repository is the unofficial Firefox and
-[Zen Browser](https://zen-browser.app/) port of **RoValra 2.5.6**, maintained
-by [8prct](https://github.com/8prct).
-It requires a Firefox 142-compatible Zen release or newer.
+Unofficial Firefox and [Zen Browser](https://zen-browser.app/) port of
+**RoValra 2.5.9**, maintained by [8prct](https://github.com/8prct).
+Original RoValra: [NotValra/RoValra](https://github.com/NotValra/RoValra).
 
-- **Firefox / Zen port:** [8prct](https://github.com/8prct)
-- **Original RoValra project:** [NotValra/RoValra](https://github.com/NotValra/RoValra)
-
-Build and load it locally:
+Build locally:
 
 ```sh
 npm install
 npm run build
 ```
 
-Open `about:debugging#/runtime/this-firefox` in Zen, select **Load Temporary
-Add-on**, then choose `dist/manifest.json`.
-
-Temporary add-ons are removed when Zen exits. A persistent install requires a
-Mozilla-signed `.xpi` (or a browser build configured to permit unsigned
-extensions).
-
-This is an unofficial port and is not affiliated with Mozilla, Zen Browser, or
-the original RoValra developers. The original project attribution and GPL-3.0
-license are preserved below.
+Load in Zen from `about:debugging#/runtime/this-firefox` using
+`dist/manifest.json`, or use the XPI in `web-ext-artifacts/`.
 
 ---
 
@@ -74,16 +62,12 @@ It helps a lot and supports continued development.
 
 ## Installation
 
-### Option 1: Chrome or this Firefox / Zen fork
+### Option 1: Chrome Web Store and Firefox Web Store (Recommended)
 
-For Chrome, use the original [Chrome Web Store release](https://chromewebstore.google.com/detail/RoValra%20-%20Roblox%20Improved/njcickgebhnpgmoodjdgohkclfplejli).
-For Firefox or Zen, use the XPI included in this repository or follow the
-temporary installation instructions above.
+For Chrome, install the original [Chrome Web Store release](https://chromewebstore.google.com/detail/RoValra%20-%20Roblox%20Improved/njcickgebhnpgmoodjdgohkclfplejli). For Firefox or Zen, use this fork's XPI or load `dist/manifest.json` temporarily.
 
 > [!WARNING]
-> This Firefox/Zen port is unofficial. It is maintained by 8prct, not by the
-> original RoValra developers. Review the source before installing and use it
-> at your own risk.
+> This Firefox/Zen port is unofficial. It is maintained by 8prct, not by the original RoValra developers. Review the source before installing and use it at your own risk.
 
 ---
 
@@ -112,12 +96,6 @@ npm run build
 ---
 
 ## Credits
-
-- **Firefox / Zen Port and Maintenance:**
-  [8prct](https://github.com/8prct)
-
-- **Original RoValra Development:**
-  [NotValra/RoValra](https://github.com/NotValra/RoValra)
 
 - **Contributors:**
   [https://github.com/NotValra/RoValra/graphs/contributors](https://github.com/NotValra/RoValra/graphs/contributors)

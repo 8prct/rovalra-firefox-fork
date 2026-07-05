@@ -6,6 +6,7 @@ import { sanitizeString } from '../utils/sanitize.js';
 import { callRobloxApiJson } from '../api.js';
 import { getAuthenticatedUserId } from '../user.js';
 import { updateUserSettingViaApi } from '../donators/settingHandler.js';
+import { serializeGradientNameSetting } from '../donators/gradientName.js';
 import { createAndShowPopup } from '../../features/catalog/40method.js';
 import * as CacheHandler from '../storage/cacheHandler.js';
 import { hasOwn } from '../utils.js';
@@ -15,13 +16,16 @@ import {
     REMOTE_SETTING_LOCK_REASON,
     getRemoteSettingLocks,
 } from './remoteSettingLocks.js';
+import { sanitizeCustomTheme } from '../themeCustom.js';
 import './settingsCompat';
 
 let currentUserTier = 0;
 let gradientSyncTimeout = null;
+let gradientNameSyncTimeout = null;
 let donatorTierPromise = null;
 const colorLiveSaveTimeouts = new Map();
 const FEATURE_STATUS_PROMPT_ACK_KEY = 'featureStatusPromptAcknowledged';
+const CUSTOM_THEME_NAME_MAX_LENGTH = 20;
 
 const isUnavailableSetting = (config) =>
     hasOwn(config, 'locked') || hasOwn(config, 'deprecated');
@@ -40,6 +44,41 @@ const getFeatureStatusPromptPills = () =>
         '<span class="rovalra-pill deprecated">Deprecated</span>',
     ].join('');
 
+function sanitizeCustomThemeSlots(value) {
+    if (!Array.isArray(value)) return [];
+
+    const slotsByIndex = new Map();
+
+    value
+        .slice(0, 5)
+        .forEach((slot, fallbackIndex) => {
+            const source = slot && typeof slot === 'object' ? slot : {};
+            if (!slot || typeof slot !== 'object') return;
+
+            const rawSlotIndex = Number(source.slot ?? source.index);
+            const slotIndex = Number.isFinite(rawSlotIndex)
+                ? Math.max(0, Math.min(4, Math.round(rawSlotIndex)))
+                : fallbackIndex;
+            const name =
+                typeof source.name === 'string' && source.name.trim()
+                    ? sanitizeString(source.name).slice(
+                        0,
+                        CUSTOM_THEME_NAME_MAX_LENGTH,
+                    )
+                    : `Custom Theme ${slotIndex + 1}`;
+            const themeSource = source.theme || source.colors || source;
+
+            slotsByIndex.set(slotIndex, {
+                slot: slotIndex,
+                name,
+                theme: sanitizeCustomTheme(themeSource),
+            });
+        });
+
+    return [...slotsByIndex.values()]
+        .sort((left, right) => left.slot - right.slot);
+}
+
 const shouldShowFeatureStatusPrompt = async (config) => {
     if (!isStatusLabeledOffByDefaultSetting(config)) return false;
 
@@ -57,6 +96,31 @@ const shouldShowFeatureStatusPrompt = async (config) => {
 const markFeatureStatusPromptAcknowledged = async () => {
     await chrome.storage.local.set({ [FEATURE_STATUS_PROMPT_ACK_KEY]: true });
 };
+
+function queueGradientNameSync(settingsOverride = {}) {
+    if (gradientNameSyncTimeout) clearTimeout(gradientNameSyncTimeout);
+
+    gradientNameSyncTimeout = setTimeout(async () => {
+        if (currentUserTier < 3) return;
+
+        const settings = {
+            ...(await loadSettings()),
+            ...settingsOverride,
+        };
+        const gradient =
+            settings.displayNameGradientEnabled === false
+                ? { ...(settings.displayNameGradient || {}), enabled: false }
+                : settings.displayNameGradient;
+        const payload = serializeGradientNameSetting(
+            gradient,
+            settings.displayNameGradientEffect,
+        );
+
+        updateUserSettingViaApi('GradientName', payload).catch((error) =>
+            console.error('RoValra: GradientName sync failed', error),
+        );
+    }, 750);
+}
 
 export const getCurrentUserTier = () => currentUserTier;
 
@@ -408,6 +472,7 @@ export const handleSaveSettings = async (settingName, value) => {
                             if (settingConfig.options === 'REGIONS') {
                                 validValues = ['AUTO', ...Object.keys(REGIONS)];
                             } else if (settingConfig.options === 'BORDERS') {
+                                validValues = [];
                             } else if (Array.isArray(settingConfig.options)) {
                                 validValues = settingConfig.options.map(
                                     (opt) =>
@@ -449,6 +514,18 @@ export const handleSaveSettings = async (settingName, value) => {
                                 Math.min(100, parseInt(value.fade, 10) || 0),
                             ),
                         };
+                        if (
+                            settingConfig.colorCount >= 3 ||
+                            settingConfig.default?.color3
+                        ) {
+                            sanitizedValue.color3 = sanitizeString(
+                                String(
+                                    value.color3 ||
+                                        settingConfig.default?.color3 ||
+                                        '#f093fb',
+                                ),
+                            );
+                        }
                     } else {
                         console.warn(
                             `Invalid string value for '${settingName}' - converting to string and sanitizing`,
@@ -496,6 +573,14 @@ export const handleSaveSettings = async (settingName, value) => {
                         }
                     }
                     break;
+
+                case 'themeEditor':
+                    sanitizedValue = sanitizeCustomTheme(value);
+                    break;
+
+                case 'themeSlots':
+                    sanitizedValue = sanitizeCustomThemeSlots(value);
+                    break;
             }
         }
 
@@ -531,6 +616,15 @@ export const handleSaveSettings = async (settingName, value) => {
                                 );
                             }
                         }, 1000);
+                    }
+                    if (
+                        settingName === 'displayNameGradientEnabled' ||
+                        settingName === 'displayNameGradient' ||
+                        settingName === 'displayNameGradientEffect'
+                    ) {
+                        queueGradientNameSync({
+                            [settingName]: sanitizedValue,
+                        });
                     }
                     if (settingName === 'avatarBorderChoice') {
                         const isDonator = currentUserTier >= 3;
@@ -714,6 +808,12 @@ export const initSettings = async (settingsContent) => {
                                 settings[settingName] || setting.default,
                             );
                         }
+                    } else if (setting.type === 'themeEditor') {
+                        if (element.rovalraThemeEditorApi) {
+                            element.rovalraThemeEditorApi.setValue(
+                                settings[settingName] || setting.default,
+                            );
+                        }
                     } else if (
                         setting.type === 'input' ||
                         setting.type === 'color'
@@ -807,7 +907,14 @@ export const initSettings = async (settingsContent) => {
                                 if (childElement.rovalraGradientApi) {
                                     childElement.rovalraGradientApi.setValue(
                                         settings[childName] ||
-                                            childSetting.default,
+                                        childSetting.default,
+                                    );
+                                }
+                            } else if (childSetting.type === 'themeEditor') {
+                                if (childElement.rovalraThemeEditorApi) {
+                                    childElement.rovalraThemeEditorApi.setValue(
+                                        settings[childName] ||
+                                        childSetting.default,
                                     );
                                 }
                             } else if (
@@ -1041,7 +1148,7 @@ export const checkSettingLocks = async (settingsContent, currentSettings) => {
                         settingsContent,
                         isLocked,
                         conf.donatorReason ||
-                            'This is a donator-exclusive feature.',
+                        'This is a donator-exclusive feature.',
                         true,
                     );
                     if (isLocked) return true;
@@ -1154,6 +1261,7 @@ export function updateConditionalSettingsVisibility(
     }
 
     const settingsToDisable = new Set();
+    const settingsToHide = new Set();
 
     for (const [settingName, isEnabled] of Object.entries(currentSettings)) {
         const config = findSettingConfig(settingName);
@@ -1168,9 +1276,14 @@ export function updateConditionalSettingsVisibility(
                         currentSettings[childConfig.condition.parent] !==
                         childConfig.condition.value
                     ) {
+                        settingsToHide.add(childName);
                         settingsToDisable.add(childName);
                     }
-                } else if (config.type === 'checkbox' && !isEnabled) {
+                } else if (
+                    config.type === 'checkbox' &&
+                    !config.keepChildSettingsEnabled &&
+                    !isEnabled
+                ) {
                     settingsToDisable.add(childName);
                 }
             }
@@ -1182,6 +1295,22 @@ export function updateConditionalSettingsVisibility(
     );
     allSettingElements.forEach((element) => {
         const settingName = element.dataset.settingName;
+        const wrapper =
+            element.closest('.child-setting-item') ||
+            element.closest('.setting');
+        if (wrapper) {
+            wrapper.style.display = settingsToHide.has(settingName) ? 'none' : '';
+        }
+
+        const separator = settingsContent.querySelector(
+            `.child-setting-separator[data-child-setting-name="${settingName}"]`,
+        );
+        if (separator) {
+            separator.style.display = settingsToHide.has(settingName)
+                ? 'none'
+                : '';
+        }
+
         applyDisabledState(
             settingName,
             settingsContent,
@@ -1463,7 +1592,7 @@ export function initializeSettingsEventListeners() {
 
         console.log(
             'Generated Environment JSON:\n' +
-                JSON.stringify(envConfig, null, 2),
+            JSON.stringify(envConfig, null, 2),
         );
         alert('Environment JSON has been printed to the console (F12).');
     });
@@ -1642,7 +1771,7 @@ export function initializeSettingsEventListeners() {
             const settingConfig = findSettingConfig(controlledSettingName);
             const defaultValue =
                 settingConfig?.default !== undefined &&
-                settingConfig.default > 0
+                    settingConfig.default > 0
                     ? settingConfig.default
                     : 1;
 
@@ -1733,11 +1862,13 @@ export function initializeSettingsEventListeners() {
                 if (settingConfig?.exclusiveWith) {
                     settingConfig.exclusiveWith.forEach(
                         (exclusiveSettingName) => {
-                            const exclusiveElement = document.querySelector(
-                                `#${exclusiveSettingName}`,
-                            );
-                            if (exclusiveElement?.checked) {
-                                exclusiveElement.checked = false;
+                            if (findSettingConfig(exclusiveSettingName) != null) {
+                                const exclusiveElement = document.querySelector(
+                                    `#${exclusiveSettingName}`,
+                                );
+                                if (exclusiveElement?.checked) {
+                                    exclusiveElement.checked = false;
+                                }
                                 savePromises.push(
                                     handleSaveSettings(
                                         exclusiveSettingName,

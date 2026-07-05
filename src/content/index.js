@@ -15,9 +15,7 @@ import { init as initVideoTest } from './features/developer/videotest.js';
 import { init as initStreamerMode } from './features/sitewide/streamermode.js';
 import { init as initMarkDownTest } from './features/developer/markdowntest.js';
 import { init as initTests } from './features/developer/tests.js';
-import { init as initApiDocs } from './features/developer/apiDocs.js';
 import { init as initModeration } from './features/moderation/moderation.js';
-import { init as initApiKey } from './core/utils/trackers/apiKey.js';
 import { init as initBirthdayTracker } from './core/utils/trackers/birthday.js';
 import { init as initServerTracker } from './core/utils/trackers/servers.js';
 import { initFriendsListTracking } from './core/utils/trackers/friendslist.js';
@@ -35,13 +33,16 @@ import { init as initGroupFunds } from './features/navigation/groupfunds.js';
 import { init as initUrlTracker } from './core/utils/trackers/urlTracker.js';
 import { init as initCustomFont } from './features/sitewide/customFont.js';
 import { init as initTransactionsLink } from './features/navigation/transactionslink.js';
+import { init as initDocsLink } from './features/navigation/docslink.js';
 import { initializeModernIcons as initModernIcons } from './features/sitewide/modernIcons.js';
 import { init as initLoginBanner } from './features/scamprevention/loginBanner.js';
 import { init as initLessPlus } from './features/sitewide/lessPlus.js';
 import { init as initKidsTheme } from './features/sitewide/kidsTheme.js';
+import { init as initKidsThemeText } from './features/sitewide/kidsThemeText.js';
 import { init as initSidebarCollapse } from './features/sitewide/sidebarCollapse.js';
 import { init as initRemoveDownloadButton } from './features/sitewide/removeDownloadButton.js';
 import { init as initPaymentMethodBonusItems } from './features/paymentmethods/bonusItems.js';
+import { init as initThemeSwitcher } from './features/sitewide/themeSwitcher.js';
 
 // Avatar
 import { init as initAvatarFilters } from './features/avatar/filters.js';
@@ -66,6 +67,7 @@ import { init as initBotDetector } from './features/games/about/botDetector.js';
 import { init as initQuickPlay } from './features/games/quickplay.js';
 import { init as initHiddenBadges } from './features/games/hiddenBadges.js';
 import { init as initBadgeLayoutToggle } from './features/games/badgeLayoutToggle.js';
+import { init as initBadgeOwnership } from './features/games/badgeOwnership.js';
 import { init as initServerList } from './features/games/serverlist/serverlist.js';
 import { initRecentServers } from './features/games/serverlist/recentservers.js';
 import { init as initRegionPlayButton } from './features/games/RegionPlayButton.js';
@@ -99,6 +101,8 @@ import { init as initDraggableGroups } from './features/groups/draggableGroups.j
 import { init as initBulkLeaveGroups } from './features/groups/bulkLeave.js';
 import { init as initPlaceVisits } from './features/groups/placevisits.js';
 import { init as initGroupCreateDate } from './features/groups/createDate.js';
+// Plus
+import { init as initRobloxPlusStats } from './features/plus/stats.js';
 // Profile
 import { init as initDonationLink } from './features/profile/header/donationlink.js';
 import { init as initRap } from './features/profile/header/rap.js';
@@ -119,6 +123,8 @@ import { init as initStatus } from './features/profile/header/status.js';
 import { init as initLastPlayed } from './features/profile/header/lastplayed.js';
 import { init as initProfileViews } from './features/profile/header/profileViews.js';
 import { init as initCurrentlyPlayingLink } from './features/profile/header/currentlyPlayingLink.js';
+import { init as initCurrentlyPlayingSubplace } from './features/profile/header/currentlyPlayingSubplace.js';
+import { init as initIdVerificationBadge } from './features/profile/header/idVerificationBadge.js';
 import { init as initFriendsSince } from './features/profile/friends/friendsSince.js';
 import { init as initUnfriend } from './features/profile/friends/unfriend.js';
 import { init as initProfileBackground } from './features/profile/header/profileBackground.js';
@@ -129,7 +135,9 @@ import { init as initPurchasePromptItemId } from './core/catalog/purchasePromptI
 import { init as initCurrencyTransfer } from './features/profile/currencytransfer.js';
 import { init as initGroupFilters } from './features/profile/groupFilters.js';
 import { init as initUsernameColor } from './features/profile/header/usernameColor.js';
+import { init as initDisplayNameGradient } from './features/profile/header/displayNameGradient.js';
 import { init as initChatEligibilityTooltip } from './features/profile/header/chatEligibilityTooltip.js';
+import { init as initProfileCustomization } from './features/profile/profileCustomization.js';
 
 // Settings
 import { init as initSettingsPage } from './features/settings/index.js';
@@ -138,7 +146,9 @@ import { init as initLegacyThemeSwitcher } from './features/settings/roblox/lega
 // Home
 import { init as initAccurateContinue } from './features/home/accurateContinue.js';
 import { init as initHomeLayout } from './features/home/homeLayout.js';
+import { init as initCustomThemeEditor } from './features/home/customThemeEditor.js';
 import { init as initUnderratedGamesHome } from './features/home/underratedGames.js';
+import { init as initThemeCatalogPage } from './features/themes/themeCatalogPage.js';
 // create
 import { init as initCreateDownload } from './features/create.roblox.com/download.js';
 import { init as initCatalogExplorer } from './features/catalog/explorer.js';
@@ -166,7 +176,6 @@ const featureRoutes = [
             initStreamerMode,
             initMarkDownTest,
             initTests,
-            initApiKey,
             initBirthdayTracker,
             initServerTracker,
             initFriendsListTracking,
@@ -184,18 +193,25 @@ const featureRoutes = [
             initBannedUsers,
             initGroupFunds,
             initTransactionsLink,
+            initDocsLink,
             initStatus,
             initCustomFont,
             initRobuxIcons,
             initProfileBackground,
             initAvatarBorder,
+            initDisplayNameGradient,
             initPurchasePromptItemId,
+            initCurrentlyPlayingSubplace,
             initUrlTracker,
             initModernIcons,
             initLessPlus,
             initKidsTheme,
+            initKidsThemeText,
             initSidebarCollapse,
             initRemoveDownloadButton,
+            initThemeSwitcher,
+            initCustomThemeEditor,
+            initThemeCatalogPage,
         ],
     },
     // pretty much just the 40% method
@@ -222,6 +238,11 @@ const featureRoutes = [
             initItemRender,
             initCatalogExplorer,
         ],
+    },
+    // Avatar pages
+    {
+        paths: ['/looks'],
+        features: [initItemRender],
     },
     // Group pages
     {
@@ -271,6 +292,7 @@ const featureRoutes = [
             initEvents,
             initHiddenBadges,
             initBadgeLayoutToggle,
+            initBadgeOwnership,
         ],
     },
     // Private games page
@@ -288,6 +310,11 @@ const featureRoutes = [
             initMultiEquip,
         ],
     },
+    // Roblox Plus Page
+    {
+        paths: ['/plus'],
+        features: [initRobloxPlusStats],
+    },
     // User profile pages
     {
         paths: ['/users/'],
@@ -300,21 +327,28 @@ const featureRoutes = [
             initUserGames,
             initTrustedFriends,
             initProfileRender,
+            initIdVerificationBadge,
             initFriendsSince,
             initUnfriend,
             initLastPlayed,
             initProfileViews,
             initCurrentlyPlayingLink,
+            initCurrentlyPlayingSubplace,
             initGroupRole,
             initCurrencyTransfer,
             initGroupFilters,
             initAvatarDownload,
             initChatEligibilityTooltip,
+            initProfileCustomization,
         ],
     },
     {
         paths: ['/users/', '/banned-users/'],
-        features: [initCategorizeWearing, initRovalraBadges, initUsernameColor],
+        features: [
+            initCategorizeWearing,
+            initRovalraBadges,
+            initUsernameColor,
+        ],
     },
 
     // Transactions page
@@ -339,11 +373,8 @@ const featureRoutes = [
         ],
     },
 
-    // API Docs
-    {
-        paths: ['/docs'],
-        features: [initApiDocs],
-    },
+    // ponytail: Swagger makes content.js exceed Mozilla's 5MB validator limit.
+    // Split this into a lazy extension page if Firefox needs API Docs later.
     // Moderation Panel
     {
         paths: ['/moderation'],
@@ -356,7 +387,7 @@ const featureRoutes = [
     },
     {
         paths: ['/home'],
-        features: [initUnderratedGamesHome, initAccurateContinue],
+        features: [initHomeLayout, initUnderratedGamesHome, initAccurateContinue],
     },
     {
         paths: ['/my/account'],
@@ -370,6 +401,65 @@ const featureRoutes = [
 ];
 
 const startTime = performance.now();
+let lastGamePageHashbangHash = null;
+
+function isGamePagePath(pathname = window.location.pathname) {
+    return /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/games\//i.test(pathname);
+}
+
+function getHashbangStrippedVariants(hash) {
+    if (!hash.startsWith('#!')) return [];
+
+    const fragment = hash.slice(2);
+    const strippedFragment = fragment.startsWith('/')
+        ? fragment.slice(1)
+        : fragment;
+
+    return [`#${strippedFragment}`, `#/${strippedFragment}`];
+}
+
+function normalizeGamePageHash() {
+    if (!isGamePagePath()) {
+        lastGamePageHashbangHash = null;
+        return false;
+    }
+
+    const currentHash = window.location.hash;
+
+    if (!currentHash) {
+        lastGamePageHashbangHash = null;
+        return false;
+    }
+
+    if (currentHash.startsWith('#!')) {
+        lastGamePageHashbangHash = currentHash;
+        return false;
+    }
+
+    if (!lastGamePageHashbangHash) return false;
+
+    const strippedVariants = getHashbangStrippedVariants(
+        lastGamePageHashbangHash,
+    );
+    if (!strippedVariants.includes(currentHash)) {
+        lastGamePageHashbangHash = null;
+        return false;
+    }
+
+    const oldUrl = window.location.href;
+    window.history.replaceState(
+        history.state,
+        '',
+        `${window.location.pathname}${window.location.search}${lastGamePageHashbangHash}`,
+    );
+    window.dispatchEvent(
+        new HashChangeEvent('hashchange', {
+            oldURL: oldUrl,
+            newURL: window.location.href,
+        }),
+    );
+    return true;
+}
 
 function runFeaturesForPage() {
     const path = window.location.pathname.toLowerCase();
@@ -403,15 +493,6 @@ async function initializePage() {
     if (window.top !== window.self || pageLoaded) return;
     pageLoaded = true;
 
-    initHomeLayout();
-    if (
-        window.location.pathname
-            .toLowerCase()
-            .replace(/^\/[a-z]{2}(?:-[a-z]{2})?\//, '/')
-            .startsWith('/home')
-    ) {
-        initUnderratedGamesHome();
-    }
     initializeObserver();
     const observerStatus = startObserving();
 
@@ -419,23 +500,41 @@ async function initializePage() {
         console.error('RoValra: OAuth token initialization failed', error),
     );
     startAuthFavoriteCleanupMonitor();
-    initApiKey().catch((error) =>
-        console.error('RoValra: API key initialization failed', error),
-    );
+
+    const runSettingsMaintenance = () => {
+        refreshRemoteSettingLocks()
+            .catch((error) =>
+                console.error(
+                    'RoValra: Failed to refresh remote settings config.',
+                    error,
+                ),
+            )
+            .finally(() =>
+                enforceSettingOverrides().catch((error) =>
+                    console.error(
+                        'RoValra: Failed to enforce setting overrides.',
+                        error,
+                    ),
+                ),
+            );
+    };
+
+    const scheduleSettingsMaintenance = () => {
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(runSettingsMaintenance, { timeout: 5000 });
+            return;
+        }
+
+        setTimeout(runSettingsMaintenance, 0);
+    };
 
     const startFeatures = async () => {
         const featureStartTime = performance.now();
 
         await t('__i18n_ready__').catch(() => {});
-        await refreshRemoteSettingLocks().catch((error) =>
-            console.error(
-                'RoValra: Failed to refresh remote settings config.',
-                error,
-            ),
-        );
-        await enforceSettingOverrides();
         detectTheme().then((theme) => dispatchThemeEvent(theme));
         runFeaturesForPage();
+        scheduleSettingsMaintenance();
 
         const endTime = performance.now();
 
@@ -490,21 +589,26 @@ function setupUrlChangeListeners() {
 
     history.pushState = function (...args) {
         originalPushState.apply(this, args);
+        normalizeGamePageHash();
         handleUrlChange();
     };
 
     history.replaceState = function (...args) {
         originalReplaceState.apply(this, args);
+        normalizeGamePageHash();
         handleUrlChange();
     };
 
     window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', normalizeGamePageHash);
 
     setInterval(() => {
         if (window.location.pathname.toLowerCase() !== lastPath) {
             handleUrlChange();
         }
     }, 500);
+
+    normalizeGamePageHash();
 }
 
 initializePage();

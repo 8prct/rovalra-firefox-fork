@@ -1,5 +1,12 @@
 const assetPaths = {
-    rovalraIcon: 'public/Assets/icon-128.png',
+    rovalraIcon: 'public/Assets/RoValraLogo.png',
+    oldRovalraIcon: 'public/Assets/OldLogo/OldLogo.png',
+    contributorIcon: 'public/Assets/Contributor.png',
+    videoStarIcon: `data:image/svg+xml,${encodeURIComponent('<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="46" height="45" viewBox="0 0 46 45"><path d="M0 0 C4.22411365 1.52787089 6.20185551 4.04747769 8.2734375 8.0390625 C9.97511659 12.63176629 9.49053434 16.65748496 7.8125 21.25 C3.41172843 27.92703273 -2.20578285 29.08415448 -9.625 30.875 C-13.17243772 32.05747924 -15.15932343 33.63276952 -18 36 C-18.99 36 -19.98 36 -21 36 C-20.67 34.02 -20.34 32.04 -20 30 C-25.68845639 33.68161518 -29.2854128 37.35518669 -32.67578125 43.2421875 C-33.33126953 44.11230469 -33.33126953 44.11230469 -34 45 C-34.99 45 -35.98 45 -37 45 C-36.77855044 33.92752222 -29.99112506 23.24594238 -23 15 C-25.31 14.01 -27.62 13.02 -30 12 C-29.67 11.01 -29.34 10.02 -29 9 C-27.09278506 8.56502115 -25.18434325 8.13458796 -23.26953125 7.734375 C-19.85805724 6.63049012 -17.41771439 4.58335695 -14.6640625 2.33984375 C-10.36760402 -1.11951132 -5.26988729 -0.40478844 0 0 Z M-6 4 C-6.185625 4.598125 -6.37125 5.19625 -6.5625 5.8125 C-8.72273753 9.09981799 -11.35107655 9.64854687 -15 11 C-14.01 11.7734375 -14.01 11.7734375 -13 12.5625 C-10.34362457 15.79995755 -10.68657868 17.92552281 -11 22 C-9.7625 21.814375 -8.525 21.62875 -7.25 21.4375 C-4.23720423 21.05288777 -1.89989173 20.9125406 1 22 C0.9175 20.9275 0.835 19.855 0.75 18.75 C1 15 1 15 3 12.5625 C3.66 12.046875 4.32 11.53125 5 11 C3.88625 10.5875 2.7725 10.175 1.625 9.75 C-0.99320695 8.64453484 -1.83493089 8.25119213 -3.4375 5.8125 C-3.623125 5.214375 -3.80875 4.61625 -4 4 C-4.66 4 -5.32 4 -6 4 Z" fill="#FFFFFF" transform="translate(37,0)"/></svg>')}`,
+    donatorTier1Icon: 'public/Assets/DonatorTiers/Bronze.png',
+    donatorTier2Icon: 'public/Assets/DonatorTiers/Silver.png',
+    donatorTier3Icon: 'public/Assets/DonatorTiers/Gold.png',
+    donatorDiamondIcon: 'public/Assets/DonatorTiers/Diamond.png',
     translateGilbert: 'public/Assets/icon-128-translate.png',
     ratBadgeIcon: 'https://www.rovalra.com/static/img/return_request.png',
     fishConfetti: 'https://www.rovalra.com/static/img/fishstrap.png',
@@ -22,6 +29,7 @@ const assetPaths = {
     BlockIcon: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2M4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12m8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8"></path></svg>')}`,
     blahaj: 'https://www.rovalra.com/static/img/blahaj.png',
     ListAlt: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-1phnduy" focusable="false" aria-hidden="true" viewBox="0 0 24 24"><path d="M19 5v14H5V5zm1.1-2H3.9c-.5 0-.9.4-.9.9v16.2c0 .4.4.9.9.9h16.2c.4 0 .9-.5.9-.9V3.9c0-.5-.5-.9-.9-.9M11 7h6v2h-6zm0 4h6v2h-6zm0 4h6v2h-6zM7 7h2v2H7zm0 4h2v2H7zm0 4h2v2H7z"></path></svg>')}`,
+    description: `data:image/svg+xml,${encodeURIComponent('<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium css-mdjgi4" focusable="false" aria-hidden="true" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8zm2 16H8v-2h8zm0-4H8v-2h8zm-3-5V3.5L18.5 9z"></path></svg>')}`,
     // Explorer thumbnail button icon (Material "account_tree").
     explorerTreeIcon: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 11V3h-7v3H9V3H2v8h7V8h2v10h4v3h7v-8h-7v3h-2V8h2v3z"></path></svg>')}`,
     cam: 'https://www.rovalra.com/static/img/cam.gif',
@@ -89,24 +97,161 @@ const assetPaths = {
         ),
 };
 let resolvedAssets = null;
+let useOldRovalraLogo = false;
+let rovalraLogoPreferenceLoaded = false;
+let rovalraLogoPreferencePromise = null;
+
+const ROVALRA_LOGO_SETTING_NAME = 'useOldRovalraLogo';
+const ROVALRA_LOGO_DEPENDENT_ASSETS = [
+    'rovalraIcon',
+    'donatorTier1Icon',
+    'donatorTier2Icon',
+    'donatorTier3Icon',
+    'donatorDiamondIcon',
+];
+
+function resolveAssetPath(path) {
+    if (
+        path.startsWith('data:') ||
+        path.startsWith('http:') ||
+        path.startsWith('https:')
+    ) {
+        return path;
+    }
+
+    return chrome.runtime.getURL(path);
+}
+
+function getRovalraLogoPath() {
+    return useOldRovalraLogo
+        ? assetPaths.oldRovalraIcon
+        : assetPaths.rovalraIcon;
+}
+
+function getAssetPath(assetName) {
+    if (assetName === 'rovalraIcon') return getRovalraLogoPath();
+    if (
+        useOldRovalraLogo &&
+        [
+            'donatorTier1Icon',
+            'donatorTier2Icon',
+            'donatorTier3Icon',
+            'donatorDiamondIcon',
+        ].includes(assetName)
+    ) {
+        return assetPaths.oldRovalraIcon;
+    }
+
+    return assetPaths[assetName];
+}
+
+function updateResolvedDynamicAssets() {
+    if (!resolvedAssets) return;
+    ROVALRA_LOGO_DEPENDENT_ASSETS.forEach((assetName) => {
+        resolvedAssets[assetName] = resolveAssetPath(getAssetPath(assetName));
+    });
+}
+
+export function updateAssetElements(assetName = 'rovalraIcon', root = null) {
+    root = root || (typeof document !== 'undefined' ? document : null);
+    if (!root?.querySelectorAll) return;
+
+    const assetUrl = getAssets()[assetName];
+    if (!assetUrl) return;
+
+    root.querySelectorAll(`[data-rovalra-asset="${assetName}"]`).forEach(
+        (element) => {
+            if ('src' in element) element.src = assetUrl;
+        },
+    );
+
+    root.querySelectorAll(`[data-rovalra-asset-mask="${assetName}"]`).forEach(
+        (element) => {
+            element.style.webkitMask = `url("${assetUrl}") center / contain no-repeat`;
+            element.style.mask = `url("${assetUrl}") center / contain no-repeat`;
+        },
+    );
+}
+
+function setRovalraLogoPreference(value) {
+    const nextValue = value === true;
+    if (useOldRovalraLogo === nextValue && rovalraLogoPreferenceLoaded) return;
+
+    useOldRovalraLogo = nextValue;
+    rovalraLogoPreferenceLoaded = true;
+    updateResolvedDynamicAssets();
+    ROVALRA_LOGO_DEPENDENT_ASSETS.forEach((assetName) => {
+        updateAssetElements(assetName);
+    });
+
+    if (typeof document !== 'undefined') {
+        document.dispatchEvent(
+            new CustomEvent('rovalra:assetsUpdated', {
+                detail: { assetNames: ROVALRA_LOGO_DEPENDENT_ASSETS },
+            }),
+        );
+    }
+}
+
+export function isUsingOldRovalraLogo() {
+    loadRovalraLogoPreference();
+    return useOldRovalraLogo;
+}
+
+function loadRovalraLogoPreference() {
+    if (
+        rovalraLogoPreferenceLoaded ||
+        rovalraLogoPreferencePromise ||
+        typeof chrome === 'undefined' ||
+        !chrome.storage?.local
+    ) {
+        return rovalraLogoPreferencePromise;
+    }
+
+    rovalraLogoPreferencePromise = chrome.storage.local
+        .get({ [ROVALRA_LOGO_SETTING_NAME]: false })
+        .then((settings) => {
+            setRovalraLogoPreference(settings[ROVALRA_LOGO_SETTING_NAME]);
+        })
+        .catch((error) => {
+            console.warn('RoValra: Failed to load logo preference.', error);
+            rovalraLogoPreferenceLoaded = true;
+        })
+        .finally(() => {
+            rovalraLogoPreferencePromise = null;
+        });
+
+    return rovalraLogoPreferencePromise;
+}
+
+if (typeof document !== 'undefined') {
+    document.addEventListener('rovalra:settingSaved', (event) => {
+        if (event.detail?.name !== ROVALRA_LOGO_SETTING_NAME) return;
+        setRovalraLogoPreference(event.detail.value);
+    });
+}
+
+if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName !== 'local') return;
+        const change = changes[ROVALRA_LOGO_SETTING_NAME];
+        if (!change) return;
+        setRovalraLogoPreference(change.newValue);
+    });
+}
 
 export function getAssets() {
     if (resolvedAssets) {
+        loadRovalraLogoPreference();
         return resolvedAssets;
     }
 
     resolvedAssets = {};
     for (const key in assetPaths) {
-        const path = assetPaths[key];
-        if (
-            path.startsWith('data:') ||
-            path.startsWith('http:') ||
-            path.startsWith('https:')
-        ) {
-            resolvedAssets[key] = path;
-        } else {
-            resolvedAssets[key] = chrome.runtime.getURL(path);
-        }
+        const path = getAssetPath(key);
+        resolvedAssets[key] = resolveAssetPath(path);
     }
+    updateResolvedDynamicAssets();
+    loadRovalraLogoPreference();
     return resolvedAssets;
 }
