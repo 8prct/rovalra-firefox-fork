@@ -1,4 +1,4 @@
-(function() {
+(function () {
     'use strict';
 
     if (window.__ROVALRA_INTERCEPTOR_SETUP__) {
@@ -15,9 +15,13 @@
     const GAME_SERVERS_API_URL = 'https://games.roblox.com/v1/games/';
     const GAMES_ROBLOX_API = 'https://games.roblox.com/';
     const TRADES_API_URL = 'https://trades.roblox.com/v2/users/';
+    const TRADE_DETAILS_API_URL = 'https://trades.roblox.com/v2/trades/';
     const TRADES_LIST_API_URL = 'https://trades.roblox.com/v1/trades/';
     const GROUP_ROLES_API_HOST = 'groups.roblox.com';
     const GROUP_ROLES_API_PATH = /^\/v1\/users\/(\d+)\/groups\/roles$/;
+    const PROFILE_API_URL =
+        'https://apis.roblox.com/profile-platform-api/v1/profiles/get';
+    const ROBLOX_ADMIN_GROUP_ID = 1200769;
     const OMNI_RECOMMENDATION_API_URL =
         'https://apis.roblox.com/discovery-api/omni-recommendation';
     const FRIEND_CAROUSEL_TOPIC_ID = 600000000;
@@ -36,6 +40,19 @@
     let homeLayoutReady = false;
     let homeLayoutReadyPromise = null;
     let resolveHomeLayoutReady = null;
+    let robloxGroupFeaturesEnabled = true;
+
+    document.addEventListener('rovalra:settingSaved', (event) => {
+        if (event.detail?.name === 'robloxGroupFeaturesEnabled') {
+            robloxGroupFeaturesEnabled = event.detail.value !== false;
+        }
+    });
+    document.addEventListener('rovalra:settingsState', (event) => {
+        if (typeof event.detail?.robloxGroupFeaturesEnabled === 'boolean') {
+            robloxGroupFeaturesEnabled =
+                event.detail.robloxGroupFeaturesEnabled;
+        }
+    });
 
     try {
         streamerModeEnabled =
@@ -50,7 +67,7 @@
         homeLayoutHidden = JSON.parse(
             sessionStorage.getItem('rovalra_homeLayoutHidden') || '[]',
         );
-    } catch (e) { }
+    } catch (e) {}
 
     document.addEventListener('rovalra-streamer-mode', (e) => {
         if (typeof e.detail === 'object') {
@@ -89,7 +106,7 @@
                 'rovalra_homeLayoutHidden',
                 JSON.stringify(homeLayoutHidden),
             );
-        } catch (error) { }
+        } catch (error) {}
     });
 
     document.addEventListener('rovalra-home-extra-sorts', (e) => {
@@ -116,6 +133,37 @@
         if (typeof url === 'string') return url;
         if (url instanceof Request) return url.url;
         return '';
+    }
+
+    function isRobloxAdminGroupMember(data) {
+        return data?.components?.Communities?.communityIds?.some(
+            (groupId) => Number(groupId) === ROBLOX_ADMIN_GROUP_ID,
+        );
+    }
+
+    function applyRobloxAdminProfileResponse(data) {
+        if (
+            robloxGroupFeaturesEnabled &&
+            isRobloxAdminGroupMember(data) &&
+            data?.components?.UserProfileHeader
+        ) {
+            data.components.UserProfileHeader.isRobloxAdmin = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    function responseWithJson(response, data) {
+        const newHeaders = new Headers(response.headers);
+        newHeaders.delete('content-length');
+        newHeaders.delete('content-encoding');
+
+        return new Response(JSON.stringify(data), {
+            status: response.status,
+            statusText: response.statusText,
+            headers: newHeaders,
+        });
     }
 
     function getGroupRolesRequestUserId(url) {
@@ -198,9 +246,7 @@
             (item) => item?.contentType === 'Game',
         );
 
-        return gameRecommendations.length
-            ? gameRecommendations.length
-            : null;
+        return gameRecommendations.length ? gameRecommendations.length : null;
     }
 
     function canAdjustHomeSort(sort) {
@@ -477,7 +523,7 @@
     }
 
     const originalFetch = window.fetch;
-    window.fetch = async function(...args) {
+    window.fetch = async function (...args) {
         const [url] = args;
         const requestUrl = getRequestUrl(url);
 
@@ -498,7 +544,7 @@
                 'apis.roblox.com/token-metadata-service/v1/sessions',
             ].some((path) => requestUrl.includes(path));
 
-            if (isSensitive && location.hostname != "create.roblox.com") {
+            if (isSensitive && location.hostname != 'create.roblox.com') {
                 try {
                     const clone = response.clone();
                     const data = await clone.json();
@@ -511,7 +557,7 @@
                         data.phone =
                             data.prefix =
                             data.countryCode =
-                            'RoValra Streamer Mode Enabled';
+                                'RoValra Streamer Mode Enabled';
                     }
                     if (requestUrl.includes('v1/birthdate')) {
                         data.birthMonth = data.birthDay = data.birthYear = 0;
@@ -553,11 +599,20 @@
                         statusText: response.statusText,
                         headers: newHeaders,
                     });
-                } catch (e) { }
+                } catch (e) {}
             }
         }
 
         response = await applyHomeLayoutToFetchResponse(requestUrl, response);
+
+        if (requestUrl.includes(PROFILE_API_URL)) {
+            try {
+                const data = await response.clone().json();
+                if (applyRobloxAdminProfileResponse(data)) {
+                    response = responseWithJson(response, data);
+                }
+            } catch (error) {}
+        }
 
         if (typeof requestUrl === 'string') {
             if (requestUrl.includes(CATALOG_API_URL)) {
@@ -571,7 +626,7 @@
                             }),
                         ),
                     )
-                    .catch(() => { });
+                    .catch(() => {});
             }
             if (requestUrl.includes(CATALOG_API_URL)) {
                 response
@@ -585,7 +640,7 @@
                             ),
                         ),
                     )
-                    .catch(() => { });
+                    .catch(() => {});
             }
             if (requestUrl.includes(CLIENT_STATUS_API_URL)) {
                 response
@@ -598,7 +653,7 @@
                             }),
                         ),
                     )
-                    .catch(() => { });
+                    .catch(() => {});
             }
             if (
                 requestUrl.includes(GAME_LAUNCH_SUCCESS_URL) &&
@@ -624,7 +679,7 @@
                             }),
                         ),
                     )
-                    .catch(() => { });
+                    .catch(() => {});
             }
             if (
                 requestUrl.includes(GAMES_ROBLOX_API) &&
@@ -640,7 +695,7 @@
                             }),
                         ),
                     )
-                    .catch(() => { });
+                    .catch(() => {});
             }
             if (
                 requestUrl.includes(TRADES_API_URL) &&
@@ -656,7 +711,7 @@
                             }),
                         ),
                     )
-                    .catch(() => { });
+                    .catch(() => {});
             }
             if (requestUrl.includes(TRADES_LIST_API_URL)) {
                 response
@@ -669,14 +724,27 @@
                             }),
                         ),
                     )
-                    .catch(() => { });
+                    .catch(() => {});
+            }
+            if (requestUrl.includes(TRADE_DETAILS_API_URL)) {
+                response
+                    .clone()
+                    .json()
+                    .then((d) =>
+                        document.dispatchEvent(
+                            new CustomEvent('rovalra-trade-details-response', {
+                                detail: d,
+                            }),
+                        ),
+                    )
+                    .catch(() => {});
             }
             if (getGroupRolesRequestUserId(requestUrl)) {
                 response
                     .clone()
                     .json()
                     .then((d) => dispatchGroupRolesResponse(requestUrl, d))
-                    .catch(() => { });
+                    .catch(() => {});
             }
         }
 
@@ -686,7 +754,7 @@
     const originalXhrOpen = XMLHttpRequest.prototype.open;
     const originalXhrSend = XMLHttpRequest.prototype.send;
 
-    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
         this._rovalra_url = url;
         this._rovalra_method = method;
 
@@ -694,7 +762,7 @@
             streamerModeEnabled &&
             typeof url === 'string' &&
             settingsPageInfoEnabled &&
-            location.hostname != "create.roblox.com"
+            location.hostname != 'create.roblox.com'
         ) {
             if (url.includes('/my/settings/json'))
                 this._rovalra_spoof_settings = true;
@@ -715,11 +783,14 @@
         ) {
             this._rovalra_home_layout = true;
         }
+        if (typeof url === 'string' && url.includes(PROFILE_API_URL)) {
+            this._rovalra_profile_api = true;
+        }
 
         return originalXhrOpen.apply(this, [method, url, ...rest]);
     };
 
-    XMLHttpRequest.prototype.send = function(...args) {
+    XMLHttpRequest.prototype.send = function (...args) {
         const xhr = this;
         if (
             xhr._rovalra_spoof_settings ||
@@ -729,11 +800,12 @@
             xhr._rovalra_spoof_country ||
             xhr._rovalra_spoof_age_group ||
             xhr._rovalra_spoof_sessions ||
-            xhr._rovalra_home_layout
+            xhr._rovalra_home_layout ||
+            xhr._rovalra_profile_api
         ) {
             Object.defineProperty(xhr, 'responseText', {
                 configurable: true,
-                get: function() {
+                get: function () {
                     if (xhr._rovalra_cached_response)
                         return xhr._rovalra_cached_response;
 
@@ -754,6 +826,9 @@
                             applyAccurateContinue(data);
                             reorderHomeSorts(data);
                         }
+                        if (xhr._rovalra_profile_api) {
+                            applyRobloxAdminProfileResponse(data);
+                        }
                         if (xhr._rovalra_spoof_settings) {
                             data.UserEmail = 'RoValra Streamer Mode Enabled';
                             data.UserEmailVerified = true;
@@ -769,13 +844,13 @@
                             data.countryCode =
                                 data.prefix =
                                 data.phone =
-                                'RoValra Streamer Mode Enabled';
+                                    'RoValra Streamer Mode Enabled';
                         }
                         if (xhr._rovalra_spoof_birthdate) {
                             data.birthMonth =
                                 data.birthDay =
                                 data.birthYear =
-                                0;
+                                    0;
                         }
                         if (xhr._rovalra_spoof_age) {
                             data.isVerified = true;
@@ -818,7 +893,7 @@
 
             Object.defineProperty(xhr, 'response', {
                 configurable: true,
-                get: function() {
+                get: function () {
                     if (this.responseType === 'json') {
                         try {
                             return JSON.parse(this.responseText);
@@ -834,7 +909,7 @@
             });
         }
 
-        xhr.addEventListener('load', function() {
+        xhr.addEventListener('load', function () {
             if (typeof xhr._rovalra_url === 'string') {
                 const triggerEvent = (eventName, detail) =>
                     document.dispatchEvent(
@@ -887,12 +962,17 @@
                             'rovalra-trades-list-response',
                             JSON.parse(xhr.responseText),
                         );
+                    if (url.includes(TRADE_DETAILS_API_URL))
+                        triggerEvent(
+                            'rovalra-trade-details-response',
+                            JSON.parse(xhr.responseText),
+                        );
                     if (getGroupRolesRequestUserId(url))
                         dispatchGroupRolesResponse(
                             url,
                             JSON.parse(xhr.responseText),
                         );
-                } catch (e) { }
+                } catch (e) {}
             }
         });
 
@@ -927,7 +1007,7 @@
         service.__rovalra_patched = true;
 
         const originalGetLimit = service.getAdvancedAccessoryLimit;
-        service.getAdvancedAccessoryLimit = function(assetTypeId, ...args) {
+        service.getAdvancedAccessoryLimit = function (assetTypeId, ...args) {
             if (multiAccessoryEnabled) {
                 const id = Number(assetTypeId);
                 if (
@@ -943,7 +1023,7 @@
         };
 
         const originalAddAsset = service.addAssetToAvatar;
-        service.addAssetToAvatar = function(asset, currentAssets) {
+        service.addAssetToAvatar = function (asset, currentAssets) {
             if (!multiAccessoryEnabled) {
                 return originalAddAsset.apply(this, arguments);
             }

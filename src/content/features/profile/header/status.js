@@ -47,7 +47,7 @@ function cleanupStatusElements(container) {
                 element.load();
             }
             element.remove();
-        } catch (e) {}
+        } catch (e) { }
     }
 }
 
@@ -73,7 +73,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (currentNode) => {
                 currentNode.style.cursor = 'text';
                 currentNode.style.pointerEvents = 'none';
             }
-        } catch (e) {}
+        } catch (e) { }
     }
 
     if (currentNode.tagName === 'IMG' && currentNode.hasAttribute('src')) {
@@ -87,7 +87,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (currentNode) => {
             ) {
                 currentNode.removeAttribute('src');
             }
-        } catch (e) {}
+        } catch (e) { }
     }
 });
 
@@ -186,6 +186,9 @@ function openEditStatusOverlay(currentStatus, onSave, isTrusted) {
 
         if (result === true) {
             close();
+        } else if (typeof result === 'string' && result.trim()) {
+            errorDisplay.textContent = result;
+            errorDisplay.style.display = 'block';
         } else {
             errorDisplay.textContent =
                 'An unknown error occurred while saving. No changes were applied.';
@@ -275,6 +278,7 @@ async function addStatusBubble(avatarContainer) {
                                     await updateUserSettingViaApi(
                                         'status',
                                         newStatus,
+                                        { throwOnError: true },
                                     );
                                 if (typeof updatedValue === 'string') {
                                     updateBubbleUI(updatedValue);
@@ -290,6 +294,9 @@ async function addStatusBubble(avatarContainer) {
                                     'RoValra: Failed to update status via API.',
                                     error,
                                 );
+                                if (error?.userMessage) {
+                                    return error.userMessage;
+                                }
                                 return false;
                             }
                         },
@@ -483,7 +490,7 @@ async function addHomeStatusHover(tile, card) {
                     video.muted = true;
                     video.volume = 0;
 
-                    video.play().catch(() => {});
+                    video.play().catch(() => { });
                 }
             }
         },
@@ -513,15 +520,16 @@ export async function init() {
     startObserving();
 
     injectStylesheet('css/thinkingbubble.css', 'rovalra-profile-status-css');
-    const selector = '.user-profile-header-details-avatar-container';
+    const selector = '.user-profile-header-details-avatar-container:not(.rovalra-sendrobux-avatar)';
     observeElement(selector, (el) => addStatusBubble(el), {
         multiple: true,
+
     });
 
     if (await settings.statusBubbleHomePage) {
         observeUserCardElements();
         onUserCardElement(addHomeStatusHover, {
-            exclude: ['.rovalra-donator-card', '.user-item-clickable'],
+            exclude: ['.rovalra-donator-card', '.user-item-clickable', '.rovalra-sendrobux-profile'],
         });
     }
 }

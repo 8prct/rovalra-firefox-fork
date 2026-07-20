@@ -18,6 +18,9 @@ const HOME_GREETING_LINK_SELECTOR =
 const HOME_GREETING_FALLBACK_PREFIX = 'Hello, ';
 const EFFECT_CLASSES = [
     'rovalra-display-name-gradient-shine',
+    'rovalra-display-name-gradient-shine-bloom',
+    'rovalra-display-name-gradient-roll',
+    'rovalra-display-name-gradient-roll-bloom',
     'rovalra-display-name-gradient-sparkles',
     'rovalra-display-name-gradient-bloom',
     'rovalra-display-name-gradient-blooming-bloom',
@@ -32,6 +35,35 @@ const PROFILE_EFFECT_HOST_SELECTOR =
     '.user-profile-header-info, .profile-header-title-container, .profile-header-title-row, .profile-header-container';
 let cardNameUnsubscribe = null;
 const gradientNameSettingsPromises = new Map();
+function lightenHexColor(value, amount = 0.18) {
+    const hex = String(value || '').replace(/^#/, '');
+    if (!/^[\da-f]{6}$/i.test(hex)) return value;
+
+    const lighten = (channel) =>
+        Math.round(
+            parseInt(channel, 16) + (255 - parseInt(channel, 16)) * amount,
+        )
+            .toString(16)
+            .padStart(2, '0');
+
+    return `#${lighten(hex.slice(0, 2))}${lighten(hex.slice(2, 4))}${lighten(hex.slice(4, 6))}`;
+}
+
+function lightenGradientColors(gradient) {
+    return {
+        color1: lightenHexColor(gradient.color1 || '#ff4ecd'),
+        color2: lightenHexColor(gradient.color2 || '#ffe66d'),
+        color3: lightenHexColor(gradient.color3 || '#4dd4ff'),
+    };
+}
+
+function isShineEffect(effect) {
+    return effect === 'shine' || effect === 'shine-bloom';
+}
+
+function isRollEffect(effect) {
+    return effect === 'roll' || effect === 'roll-bloom';
+}
 
 function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;
@@ -59,7 +91,8 @@ function ensureStyle() {
             overflow-clip-margin: 24px;
         }
 
-        .rovalra-display-name-gradient-shine {
+        .rovalra-display-name-gradient-shine,
+        .rovalra-display-name-gradient-shine-bloom {
             background-image:
                 linear-gradient(
                     110deg,
@@ -71,28 +104,45 @@ function ensureStyle() {
                 ),
                 var(--rovalra-display-name-gradient) !important;
             background-size: 240% 100%, 100% 100% !important;
-            text-shadow:
-                0 0 5px rgba(255, 255, 255, 0.55),
-                0 0 14px rgba(255, 255, 255, 0.34),
-                0 0 22px rgba(255, 255, 255, 0.2);
-            filter: saturate(1.12);
             animation: rovalra-display-name-gradient-shine 3s ease-in-out infinite;
+        }
+
+        .rovalra-display-name-gradient-shine-bloom {
+            text-shadow:
+                0 0 3px rgba(255, 255, 255, 0.38),
+                0 0 9px rgba(255, 255, 255, 0.22),
+                0 0 14px rgba(255, 255, 255, 0.14);
+            filter: saturate(1.08);
+        }
+
+        .rovalra-display-name-gradient-roll,
+        .rovalra-display-name-gradient-roll-bloom {
+            background-size: 200% 100% !important;
+            animation: rovalra-display-name-gradient-roll 3.6s linear infinite;
+        }
+
+        .rovalra-display-name-gradient-roll-bloom {
+            text-shadow:
+                0 0 2px rgba(255, 255, 255, 0.34),
+                0 0 7px rgba(255, 255, 255, 0.18),
+                0 0 12px rgba(255, 255, 255, 0.12);
+            filter: saturate(1.08);
         }
 
         .rovalra-display-name-gradient-sparkles {
             text-shadow:
-                0 0 3px rgba(255, 255, 255, 0.46),
-                0 0 9px rgba(255, 110, 190, 0.28),
-                0 0 16px rgba(255, 78, 205, 0.2);
-            filter: saturate(1.08);
+                0 0 2px rgba(255, 255, 255, 0.38),
+                0 0 6px rgba(255, 110, 190, 0.2),
+                0 0 10px rgba(255, 78, 205, 0.14);
+            filter: saturate(1.05);
         }
 
         .rovalra-display-name-gradient-blooming-bloom,
         .rovalra-display-name-gradient-bloom {
             text-shadow:
-                0 0 4px rgba(255, 255, 255, 0.48),
-                0 0 12px rgba(255, 255, 255, 0.3);
-            filter: saturate(1.1);
+                0 0 2px rgba(255, 255, 255, 0.36),
+                0 0 7px rgba(255, 255, 255, 0.2);
+            filter: saturate(1.06);
             animation: rovalra-display-name-gradient-blooming-bloom 2.2s ease-in-out infinite;
         }
 
@@ -101,19 +151,24 @@ function ensureStyle() {
             50% { background-position: 180% 50%, 0 0; }
         }
 
+        @keyframes rovalra-display-name-gradient-roll {
+            0% { background-position: 0% 50%; }
+            100% { background-position: -200% 50%; }
+        }
+
         @keyframes rovalra-display-name-gradient-blooming-bloom {
             0%, 100% {
                 text-shadow:
-                    0 0 4px rgba(255, 255, 255, 0.35),
-                    0 0 10px rgba(255, 255, 255, 0.28);
+                    0 0 2px rgba(255, 255, 255, 0.3),
+                    0 0 6px rgba(255, 255, 255, 0.18);
                 filter: saturate(1);
             }
             50% {
                 text-shadow:
-                    0 0 8px rgba(255, 255, 255, 0.85),
-                    0 0 18px rgba(255, 255, 255, 0.55),
-                    0 0 28px rgba(255, 255, 255, 0.35);
-                filter: saturate(1.2);
+                    0 0 4px rgba(255, 255, 255, 0.62),
+                    0 0 10px rgba(255, 255, 255, 0.34),
+                    0 0 16px rgba(255, 255, 255, 0.2);
+                filter: saturate(1.12);
             }
         }
     `;
@@ -145,6 +200,7 @@ function clearDisplayNameGradient(nameEl) {
     nameEl.style.removeProperty('background-clip');
     nameEl.style.removeProperty('-webkit-background-clip');
     nameEl.style.removeProperty('background-size');
+    nameEl.style.removeProperty('background-position');
     nameEl.style.removeProperty('background-repeat');
     nameEl.style.removeProperty('color');
     nameEl.style.removeProperty('overflow');
@@ -158,11 +214,18 @@ function buildGradient(gradient) {
     const start = (100 - fade) / 2;
     const end = 100 - start;
     const angle = Math.max(0, Math.min(360, Number(gradient.angle ?? 90)));
-    const color1 = gradient.color1 || '#ff4ecd';
-    const color2 = gradient.color2 || '#ffe66d';
-    const color3 = gradient.color3 || '#4dd4ff';
+    const { color1, color2, color3 } = lightenGradientColors(gradient);
 
     return `linear-gradient(${angle}deg, ${color1} ${start}%, ${color2} 50%, ${color3} ${end}%)`;
+}
+
+function buildRollingGradient(gradient) {
+    if (!gradient?.enabled) return null;
+
+    const angle = Math.max(0, Math.min(360, Number(gradient.angle ?? 90)));
+    const { color1, color2, color3 } = lightenGradientColors(gradient);
+
+    return `linear-gradient(${angle}deg, ${color1} 0%, ${color2} 25%, ${color3} 50%, ${color2} 75%, ${color1} 100%)`;
 }
 
 function applyGradientNameToElement(nameEl, gradientName, options = {}) {
@@ -171,9 +234,12 @@ function applyGradientNameToElement(nameEl, gradientName, options = {}) {
         return false;
     }
 
-    const background = buildGradient(gradientName.gradient);
-    const hasEffect = gradientName.effect && gradientName.effect !== STATIC_EFFECT;
+    const hasEffect =
+        gradientName.effect && gradientName.effect !== STATIC_EFFECT;
     const effect = options.animate ? gradientName.effect : STATIC_EFFECT;
+    const background = isRollEffect(effect)
+        ? buildRollingGradient(gradientName.gradient)
+        : buildGradient(gradientName.gradient);
     if (!background && effect === STATIC_EFFECT) {
         clearDisplayNameGradient(nameEl);
         return hasEffect;
@@ -193,15 +259,34 @@ function applyGradientNameToElement(nameEl, gradientName, options = {}) {
     setEffectHosts(nameEl, effect !== STATIC_EFFECT);
 
     if (background) {
-        const backgroundSize =
-            effect === 'shine' ? '240% 100%, 100% 100%' : '100% 100%';
+        let backgroundSize = '100% 100%';
+        if (isShineEffect(effect)) {
+            backgroundSize = '240% 100%, 100% 100%';
+        } else if (isRollEffect(effect)) {
+            backgroundSize = '200% 100%';
+        }
+        const backgroundRepeat = isRollEffect(effect)
+            ? 'repeat-x'
+            : 'no-repeat';
 
         nameEl.style.backgroundImage = background;
         nameEl.style.setProperty('--rovalra-display-name-gradient', background);
         nameEl.style.setProperty('background-clip', 'text', 'important');
-        nameEl.style.setProperty('-webkit-background-clip', 'text', 'important');
-        nameEl.style.setProperty('background-size', backgroundSize, 'important');
-        nameEl.style.setProperty('background-repeat', 'no-repeat', 'important');
+        nameEl.style.setProperty(
+            '-webkit-background-clip',
+            'text',
+            'important',
+        );
+        nameEl.style.setProperty(
+            'background-size',
+            backgroundSize,
+            'important',
+        );
+        nameEl.style.setProperty(
+            'background-repeat',
+            backgroundRepeat,
+            'important',
+        );
         nameEl.style.setProperty('color', 'transparent', 'important');
     } else {
         nameEl.style.removeProperty('background');
@@ -210,6 +295,7 @@ function applyGradientNameToElement(nameEl, gradientName, options = {}) {
         nameEl.style.removeProperty('background-clip');
         nameEl.style.removeProperty('-webkit-background-clip');
         nameEl.style.removeProperty('background-size');
+        nameEl.style.removeProperty('background-position');
         nameEl.style.removeProperty('background-repeat');
         nameEl.style.removeProperty('color');
     }
@@ -230,7 +316,9 @@ function normalizeGradientNameFromSettings(userSettings) {
 }
 
 function hasDisplayNameCosmetic(nameEl) {
-    return BASE_CLASSES.some((className) => nameEl.classList.contains(className));
+    return BASE_CLASSES.some((className) =>
+        nameEl.classList.contains(className),
+    );
 }
 
 function isHomeGreetingElement(nameEl) {

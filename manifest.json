@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "RoValra - Roblox Improved (Firefox)",
-    "version": "2.5.9",
+    "version": "2.5.10.1",
     "author": "8prct (Firefox/Zen port); NotValra (original RoValra)",
     "homepage_url": "https://github.com/8prct/rovalra-firefox-fork",
     "description": "Unofficial Firefox and Zen Browser port of RoValra, maintained by 8prct.",

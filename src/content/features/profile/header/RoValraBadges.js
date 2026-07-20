@@ -8,32 +8,45 @@ import { getUserIdFromUrl } from '../../../core/idExtractor.js';
 import { getAuthenticatedUserId } from '../../../core/user.js';
 import { settings } from '../../../core/settings/getSettings.js';
 const badgeCache = new Map();
-const videoStarBadgeCache = new Map();
+const groupRuntimeBadgeCache = new Map();
 const VIDEO_STAR_GROUP_ID = 4199740;
 const VIDEO_STAR_BADGE_NAME = 'video_star';
+const COMMUNITY_FEEDBACK_PROGRAM_GROUP_ID = 12051064;
+const COMMUNITY_FEEDBACK_PROGRAM_BADGE_NAME = 'community_feedback_program';
+const CREATOR_EVENTS_GROUP_ID = 9420522;
+const CREATOR_EVENTS_BADGE_NAME = 'creator_events';
 let groupRolesListenerInitialized = false;
 
-function isVideoStarGroupRole(item) {
-    return (
-        item?.group?.id === VIDEO_STAR_GROUP_ID &&
-        item?.role?.name === 'Video Star'
-    );
+function isVideoStarGroupMember(item) {
+    return item?.group?.id === VIDEO_STAR_GROUP_ID;
 }
 
-function hasVideoStarBadge(userId) {
-    return videoStarBadgeCache.get(String(userId)) === true;
+function isCommunityFeedbackProgramGroupMember(item) {
+    return item?.group?.id === COMMUNITY_FEEDBACK_PROGRAM_GROUP_ID;
+}
+
+function isCreatorEventsGroupMember(item) {
+    return item?.group?.id === CREATOR_EVENTS_GROUP_ID;
+}
+
+function getRuntimeGroupBadges(userId) {
+    return groupRuntimeBadgeCache.get(String(userId)) || [];
 }
 
 function mergeRuntimeBadges(userId, badges, options = {}) {
-    if (
-        options.videoStarBadgeEnabled === false ||
-        !hasVideoStarBadge(userId) ||
-        badges.includes(VIDEO_STAR_BADGE_NAME)
-    ) {
-        return badges;
-    }
+    const runtimeBadges =
+        options.robloxGroupFeaturesEnabled === false
+            ? []
+            : getRuntimeGroupBadges(userId);
+    if (!runtimeBadges.length) return badges;
 
-    return [...badges, VIDEO_STAR_BADGE_NAME];
+    const disabledRuntimeBadges = options.disabledRuntimeBadges || new Set();
+    const mergedBadges = [...badges];
+    runtimeBadges.forEach((badgeName) => {
+        if (disabledRuntimeBadges.has(badgeName)) return;
+        if (!mergedBadges.includes(badgeName)) mergedBadges.push(badgeName);
+    });
+    return mergedBadges;
 }
 
 function rerenderCurrentProfileBadges() {
@@ -351,10 +364,15 @@ async function addHeaderBadges(container) {
             if (!isOwnProfile) badgeCache.set(currentUserId, data);
         }
 
-        const videoStarBadgeEnabled =
-            (await settings.videoStarBadgeEnabled) !== false;
+        const robloxGroupFeaturesEnabled =
+            (await settings.robloxGroupFeaturesEnabled) !== false;
+        const disabledRuntimeBadges = new Set();
+        if ((await settings.videoStarBadgeEnabled) === false) {
+            disabledRuntimeBadges.add(VIDEO_STAR_BADGE_NAME);
+        }
         const mergedApiBadges = mergeRuntimeBadges(currentUserId, data.apiBadges, {
-            videoStarBadgeEnabled,
+            robloxGroupFeaturesEnabled,
+            disabledRuntimeBadges,
         });
 
         container
@@ -455,6 +473,14 @@ async function addProfileBadgeButtons(buttonContainer) {
 }
 
 export function init() {
+    settings.robloxGroupFeaturesEnabled.then((enabled) => {
+        document.dispatchEvent(
+            new CustomEvent('rovalra:settingsState', {
+                detail: { robloxGroupFeaturesEnabled: enabled !== false },
+            }),
+        );
+    });
+
     if (!groupRolesListenerInitialized) {
         groupRolesListenerInitialized = true;
         document.addEventListener('rovalra-group-roles-response', (event) => {
@@ -462,9 +488,19 @@ export function init() {
             if (!userId) return;
 
             const groups = event.detail?.data?.data;
-            const isVideoStar =
-                Array.isArray(groups) && groups.some(isVideoStarGroupRole);
-            videoStarBadgeCache.set(userId, isVideoStar);
+            const runtimeBadges = [];
+            if (Array.isArray(groups)) {
+                if (groups.some(isVideoStarGroupMember)) {
+                    runtimeBadges.push(VIDEO_STAR_BADGE_NAME);
+                }
+                if (groups.some(isCommunityFeedbackProgramGroupMember)) {
+                    runtimeBadges.push(COMMUNITY_FEEDBACK_PROGRAM_BADGE_NAME);
+                }
+                if (groups.some(isCreatorEventsGroupMember)) {
+                    runtimeBadges.push(CREATOR_EVENTS_BADGE_NAME);
+                }
+            }
+            groupRuntimeBadgeCache.set(userId, runtimeBadges);
 
             if (userId !== String(getUserIdFromUrl() || '')) return;
 
@@ -472,7 +508,14 @@ export function init() {
         });
 
         document.addEventListener('rovalra:settingSaved', (event) => {
-            if (event.detail?.name !== 'videoStarBadgeEnabled') return;
+            if (
+                ![
+                    'robloxGroupFeaturesEnabled',
+                    'videoStarBadgeEnabled',
+                ].includes(event.detail?.name)
+            ) {
+                return;
+            }
             rerenderCurrentProfileBadges();
         });
     }

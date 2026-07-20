@@ -23,6 +23,7 @@ import { initTransactionsTracking } from './core/utils/trackers/transactions.js'
 import { initBadgesTracking } from './core/utils/trackers/badges.js';
 import { initAvatarInventoryTracking } from './core/utils/trackers/avatarInventory.js';
 import { initUserCurrencyTracking } from './core/utils/trackers/currency.js';
+import { init as initClientChannelTracker } from './core/utils/trackers/channels.js';
 import { init as initPrivateGames } from './features/games/privateGames.js';
 import { init as initGamePassViewer } from './features/games/gamePassViewer.js';
 import { init as initQoLToggles } from './features/navigation/QoLToggles.js';
@@ -40,9 +41,13 @@ import { init as initLessPlus } from './features/sitewide/lessPlus.js';
 import { init as initKidsTheme } from './features/sitewide/kidsTheme.js';
 import { init as initKidsThemeText } from './features/sitewide/kidsThemeText.js';
 import { init as initSidebarCollapse } from './features/sitewide/sidebarCollapse.js';
+import { init as initSidebarLayout } from './features/sitewide/sidebarLayout.js';
 import { init as initRemoveDownloadButton } from './features/sitewide/removeDownloadButton.js';
+import { init as initFriendGameLink } from './features/sitewide/friendGameLink.js';
+import { init as initWideGameTileStats } from './features/sitewide/wideGameTileStats.js';
 import { init as initPaymentMethodBonusItems } from './features/paymentmethods/bonusItems.js';
 import { init as initThemeSwitcher } from './features/sitewide/themeSwitcher.js';
+import { initNotificationCenter as initReceiveRobuxNotificationCenter } from './features/plus/sendRobux.js';
 
 // Avatar
 import { init as initAvatarFilters } from './features/avatar/filters.js';
@@ -78,6 +83,8 @@ import { init as initGameBanner } from './core/ui/games/banner.js';
 import { init as bannertest } from './features/games/banner.js';
 import { init as quickOutfits } from './features/games/actions/quickOutfits.js';
 import { init as initDevProductLoader } from './features/games/tab/DevProducts.js';
+import { init as initDeveloperProductsSection } from './features/games/DeveloperProductsSection.js';
+import { init as initDeveloperProductAutoBuy } from './features/games/developerProductAutoBuy.js';
 import { init as initHeatmap } from './features/games/tab/updateHistory.js';
 import { init as initTotalSpentGames } from './features/games/tab/totalSpentGames.js';
 import { init as initEvents } from './features/games/about/events.js';
@@ -103,6 +110,7 @@ import { init as initPlaceVisits } from './features/groups/placevisits.js';
 import { init as initGroupCreateDate } from './features/groups/createDate.js';
 // Plus
 import { init as initRobloxPlusStats } from './features/plus/stats.js';
+import { init as initRobloxPlusTransferLimits } from './features/plus/transferLimits.js';
 // Profile
 import { init as initDonationLink } from './features/profile/header/donationlink.js';
 import { init as initRap } from './features/profile/header/rap.js';
@@ -138,6 +146,7 @@ import { init as initUsernameColor } from './features/profile/header/usernameCol
 import { init as initDisplayNameGradient } from './features/profile/header/displayNameGradient.js';
 import { init as initChatEligibilityTooltip } from './features/profile/header/chatEligibilityTooltip.js';
 import { init as initProfileCustomization } from './features/profile/profileCustomization.js';
+import { initProfileButton as initSendRobuxProfileButton } from './features/plus/sendRobux.js';
 
 // Settings
 import { init as initSettingsPage } from './features/settings/index.js';
@@ -154,16 +163,20 @@ import { init as initCreateDownload } from './features/create.roblox.com/downloa
 import { init as initCatalogExplorer } from './features/catalog/explorer.js';
 import { enforceSettingOverrides } from './core/settings/handlesettings.js';
 import { refreshRemoteSettingLocks } from './core/settings/remoteSettingLocks.js';
+// buy page
+import { initBuyRobuxPage as initSendRobuxBuyPage } from './features/plus/sendRobux.js'
 
 injectFirefoxPageScripts();
 
 let pageLoaded = false;
 let lastPath = window.location.pathname.toLowerCase();
+const initializedPersistentFeatures = new Set();
 
 const featureRoutes = [
     // Generic features that run on most pages
     {
         paths: ['*'],
+        once: true,
         features: [
             initSettingsPage,
             initQuickPlay,
@@ -183,6 +196,7 @@ const featureRoutes = [
             initBadgesTracking,
             initAvatarInventoryTracking,
             initUserCurrencyTracking,
+            initClientChannelTracker,
             initQoLToggles,
             initCopyId,
             initBetaPrograms,
@@ -208,16 +222,24 @@ const featureRoutes = [
             initKidsTheme,
             initKidsThemeText,
             initSidebarCollapse,
+            initSidebarLayout,
             initRemoveDownloadButton,
+            initFriendGameLink,
+            initWideGameTileStats,
             initThemeSwitcher,
             initCustomThemeEditor,
             initThemeCatalogPage,
+            initReceiveRobuxNotificationCenter,
         ],
     },
     // pretty much just the 40% method
     {
         paths: ['/catalog', '/bundles', '/game-pass', '/games'],
         features: [init40Method, initPurchasePrompt, initDonationLink],
+    },
+    {
+        paths: ['/developer-product/'],
+        features: [initPurchasePrompt, initDeveloperProductAutoBuy],
     },
     // Game pass viewer for 404 pages
     {
@@ -266,6 +288,7 @@ const featureRoutes = [
     {
         paths: ['/games/'],
         features: [
+            initDeveloperProductsSection,
             initGameBanner,
             initServerIdExtraction,
             initBotDetector,
@@ -295,9 +318,9 @@ const featureRoutes = [
             initBadgeOwnership,
         ],
     },
-    // Private games page
+    // Private games page and unavailable game redirects
     {
-        paths: ['/private-games/'],
+        paths: ['/games/', '/private-games/'],
         features: [initPrivateGames],
     },
     // avatar
@@ -313,7 +336,7 @@ const featureRoutes = [
     // Roblox Plus Page
     {
         paths: ['/plus'],
-        features: [initRobloxPlusStats],
+        features: [initRobloxPlusStats, initRobloxPlusTransferLimits],
     },
     // User profile pages
     {
@@ -340,15 +363,12 @@ const featureRoutes = [
             initAvatarDownload,
             initChatEligibilityTooltip,
             initProfileCustomization,
+            initSendRobuxProfileButton,
         ],
     },
     {
         paths: ['/users/', '/banned-users/'],
-        features: [
-            initCategorizeWearing,
-            initRovalraBadges,
-            initUsernameColor,
-        ],
+        features: [initCategorizeWearing, initRovalraBadges, initUsernameColor],
     },
 
     // Transactions page
@@ -387,7 +407,11 @@ const featureRoutes = [
     },
     {
         paths: ['/home'],
-        features: [initHomeLayout, initUnderratedGamesHome, initAccurateContinue],
+        features: [
+            initHomeLayout,
+            initUnderratedGamesHome,
+            initAccurateContinue,
+        ],
     },
     {
         paths: ['/my/account'],
@@ -397,6 +421,11 @@ const featureRoutes = [
     {
         paths: ['/NewLogin', '/Login'],
         features: [initLoginBanner],
+    },
+    // Buy Robux Page
+    {
+        paths: ['/upgrades/robux'],
+        features: [initSendRobuxBuyPage],
     },
 ];
 
@@ -464,6 +493,7 @@ function normalizeGamePageHash() {
 function runFeaturesForPage() {
     const path = window.location.pathname.toLowerCase();
     const normalizedPath = path.replace(/^\/[a-z]{2}(?:-[a-z]{2})?\//, '/');
+    const featuresRunThisPass = new Set();
 
     featureRoutes.forEach((route) => {
         if (
@@ -478,6 +508,14 @@ function runFeaturesForPage() {
         ) {
             if (route.features && Array.isArray(route.features)) {
                 route.features.forEach((init) => {
+                    if (featuresRunThisPass.has(init)) return;
+                    if (route.once && initializedPersistentFeatures.has(init)) {
+                        return;
+                    }
+
+                    featuresRunThisPass.add(init);
+                    if (route.once) initializedPersistentFeatures.add(init);
+
                     try {
                         init();
                     } catch (error) {
@@ -531,7 +569,7 @@ async function initializePage() {
     const startFeatures = async () => {
         const featureStartTime = performance.now();
 
-        await t('__i18n_ready__').catch(() => {});
+        await t('__i18n_ready__').catch(() => { });
         detectTheme().then((theme) => dispatchThemeEvent(theme));
         runFeaturesForPage();
         scheduleSettingsMaintenance();
@@ -542,8 +580,8 @@ async function initializePage() {
             `%cRoValra Initialized`,
             'font-size: 1.5em; color: #FF4500;',
             `\n(Observer: ${observerStatus})` +
-                `\nFeature Load Time: ${(endTime - featureStartTime).toFixed(2)}ms` +
-                `\nTotal Load Time: ${(endTime - startTime).toFixed(2)}ms`,
+            `\nFeature Load Time: ${(endTime - featureStartTime).toFixed(2)}ms` +
+            `\nTotal Load Time: ${(endTime - startTime).toFixed(2)}ms`,
         );
     };
 
@@ -587,13 +625,13 @@ function setupUrlChangeListeners() {
     const originalPushState = history.pushState;
     const originalReplaceState = history.replaceState;
 
-    history.pushState = function (...args) {
+    history.pushState = function(...args) {
         originalPushState.apply(this, args);
         normalizeGamePageHash();
         handleUrlChange();
     };
 
-    history.replaceState = function (...args) {
+    history.replaceState = function(...args) {
         originalReplaceState.apply(this, args);
         normalizeGamePageHash();
         handleUrlChange();

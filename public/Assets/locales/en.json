@@ -17,6 +17,18 @@
         "show": "Show",
         "hide": "Hide"
     },
+    "sidebarLayout": {
+        "untitled": "Untitled",
+        "empty": "RoValra was unable to find any sidebar buttons.",
+        "reset": "Reset",
+        "save": "Save",
+        "overlayTitle": "Sidebar Layout",
+        "button": "Customize Layout",
+        "myProfile": "My Profile",
+        "disabled": "Disabled",
+        "show": "Show",
+        "hide": "Hide"
+    },
     "underratedGames": {
         "topic": "Underrated Games",
         "subtitle": "Underrated games hand picked by the RoValra community.",
@@ -368,6 +380,7 @@
         "friendsFollowingAndFollowers": "Friends, Followers, & Following",
         "friendsAndFollowing": "Friends & Following",
         "friends": "Friends",
+        "trustedFriends": "Trusted Friends",
         "noOne": "No one"
     },
     "groupFunds": {
@@ -658,6 +671,8 @@
     },
     "createRoblox": {
         "download": "Download",
+        "downloadMesh": "Download .mesh",
+        "downloadObj": "Download .obj",
         "explorer": {
             "button": "Explorer",
             "title": "Explorer",
@@ -799,7 +814,24 @@
     "privateGames": {
         "tabs": {
             "about": "About",
-            "store": "Store"
+            "store": "Store",
+            "servers": "Servers"
+        },
+        "servers": {
+            "title": "Your Private Servers",
+            "description": "Play in your own space, solo or with people you invite",
+            "friendsTitle": "Servers My Friends Are In",
+            "publicTitle": "Other Servers",
+            "privateServer": "Private server",
+            "players": "{{playing}} of {{maxPlayers}} people max",
+            "join": "Join",
+            "loadMore": "Load More",
+            "loading": "Loading servers...",
+            "noServers": "No Servers Found.",
+            "loadError": "Unable to load servers.",
+            "ownerAvatar": "Server owner",
+            "playerAvatar": "Player",
+            "morePlayers": "+{{count}}"
         },
         "privateExperience": "Private Experience",
         "experienceIsPrivate": "This experience is private.",
@@ -872,7 +904,7 @@
         "inventory": "Inventory",
         "by": "By",
         "usePassIn": "Use this Pass in:",
-        "rovalraNoticeDescription": "This game pass page is not viewable without RoValra."
+        "rovalraNoticeDescription": "This game pass is inactive and cannot be purchased due to Roblox limitations, possibly related to account age or game visibility."
     },
     "playabilityStatus": {
         "0": "This experience is unavailable",
@@ -1015,6 +1047,61 @@
         },
         "privateServerTooltip": {
             "tooltipText": "Original Price: <b>{{originalPrice}} Robux</b><br>Currently shows as <b>Free</b> due to Roblox Plus."
+        },
+        "sendRobux": {
+            "profile": {
+                "button": "Send Robux",
+                "openInApp": "Open In App"
+            },
+            "buyRobux": {
+                "deletedAccountTitle": "Cannot Send Robux",
+                "deletedAccountBody": "This user's account has been deleted, it cannot be sent Robux"
+            },
+            "popup": {
+                "shared": {
+                    "title": "Send Robux",
+                    "titleSilly": "send bobux :3",
+                    "okBtn": "OK"
+                },
+                "step1": {
+                    "robuxInputName": "Robux Amount to Send",
+                    "mutedNotice": "Robux are sent instantly with no fees",
+                    "minRobux": "You must send at least {{robuxAmount}} Robux",
+                    "maxRobux": "You must send no more than {{robuxAmount}} Robux",
+                    "notEnoughRobux": "You don't have enough Robux",
+                    "nextBtn": "Next"
+                },
+                "step2": {
+                    "sendBtn": "Send",
+                    "editBtn": "Edit",
+                    "mutedNotice": "No cancellations. You may need age check or parent approval.",
+                    "transferErrorGeneric": "An unknown error occured.",
+                    "transferErrorNoMessage": "Unknown error occured with no message provided",
+                    "transferSuccessBody": "The transfer was a success!",
+                    "transferSuccessBodySilly": "transfer was alright! very cool",
+                    "transferSuccessOkBtnSilly": "electric boogaloo",
+                    "userInfoFriendTime": "Friended {{time, relativetime}}",
+                    "userInfoMutualFriends_one": "{{count}} mutual friend",
+                    "userInfoMutualFriends_other": "{{count}} mutual friends",
+                    "userInfoJoin": "Joined in {{year}}",
+                    "paramPassedError": "An unknown error occured! Check console and report the issue to RoValra."
+                },
+                "parentPerms": {
+                    "askBtn": "Ask",
+                    "sendRobuxBody": "To send Robux, you need parent permission",
+                    "receiveRobuxBody": "To receive Robux, you need parent permission",
+                    "askTitle": "Ask for Permission",
+                    "askTitleSilly": "ask parents for perms",
+                    "errorSending": "An unknown error occured, check the console and report it to RoValra",
+                    "errorReceivingTitle": "There was an error accepting the Robux",
+                    "errorReceivingBody": "An unknown error occured, you might have already accepted this Robux transfer. Check the console for details.",
+                    "errorReceivingOkBtnSilly": "aw",
+                    "successfulAskTitle": "Request Sent",
+                    "successfulAskTitleSilly": "we notified ur parents, prepare...",
+                    "successfulAskBody": "We have sent the request to your parents and guardians via email!",
+                    "successfulAskOkBtnSilly": "alright very cool, thanks"
+                }
+            }
         }
     }
 }
