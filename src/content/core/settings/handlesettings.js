@@ -11,6 +11,13 @@ import { createAndShowPopup } from '../../features/catalog/40method.js';
 import * as CacheHandler from '../storage/cacheHandler.js';
 import { hasOwn } from '../utils.js';
 import { showConfirmationPrompt } from '../ui/confirmationPrompt.js';
+import { showSystemAlert } from '../ui/roblox/alert.js';
+import { requestTouAgreement } from '../ui/tou/touAgreement.js';
+import {
+    normalizeProfilePronouns,
+    replacePronounSpecialCharacters,
+    truncateProfilePronouns,
+} from '../profile/pronouns.js';
 import {
     REMOTE_SETTING_LOCKS_KEY,
     REMOTE_SETTING_LOCK_REASON,
@@ -18,16 +25,144 @@ import {
     getRemoteSettingLocks,
     refreshRemoteSettingLocks,
 } from './remoteSettingLocks.js';
-import { sanitizeCustomTheme } from '../themeCustom.js';
+import { sanitizeBackgroundImage } from '../backgroundImage.js';
 import './settingsCompat';
 
 let currentUserTier = 0;
 let gradientSyncTimeout = null;
 let gradientNameSyncTimeout = null;
 let donatorTierPromise = null;
+let inMemoryDonatorResponse = null;
+let inMemoryDonatorUserId = null;
+let settingsKeySyncQueue = Promise.resolve();
 const colorLiveSaveTimeouts = new Map();
 const FEATURE_STATUS_PROMPT_ACK_KEY = 'featureStatusPromptAcknowledged';
-const CUSTOM_THEME_NAME_MAX_LENGTH = 20;
+const PROFILE_PRONOUNS_SETTING_NAME = 'profilePronouns';
+const PROFILE_PRONOUNS_API_KEY = 'pronouns';
+const PROFILE_PRONOUNS_AGREEMENT_KEY = 'rovalra_pronouns_guidelines_agreed';
+const INVALID_HTTP_URL = Symbol('invalid-http-url');
+
+function applyCharacterReplacements(value, replacements) {
+    if (typeof value !== 'string' || !replacements) return value;
+
+    return Object.entries(replacements).reduce(
+        (result, [search, replacement]) =>
+            search ? result.split(search).join(String(replacement)) : result,
+        value,
+    );
+}
+
+function restoreProfilePronounsInput(value) {
+    const input = document.getElementById(PROFILE_PRONOUNS_SETTING_NAME);
+    if (!(input instanceof HTMLInputElement)) return;
+
+    input.value = value || '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function consumeProfilePronounsInputAgreement() {
+    const input = document.getElementById(PROFILE_PRONOUNS_SETTING_NAME);
+    if (!(input instanceof HTMLInputElement)) return false;
+    if (input.dataset.rovalraAgreementConfirmedForEdit !== 'true') {
+        return false;
+    }
+
+    delete input.dataset.rovalraAgreementConfirmedForEdit;
+    return true;
+}
+
+async function prepareProfilePronounsUpdate(value) {
+    const normalizedValue = normalizeProfilePronouns(value);
+    const stored = await chrome.storage.local.get([
+        PROFILE_PRONOUNS_SETTING_NAME,
+        'rovalra_settings',
+    ]);
+    const previousValue = normalizeProfilePronouns(
+        stored[PROFILE_PRONOUNS_SETTING_NAME] ??
+            stored.rovalra_settings?.[PROFILE_PRONOUNS_SETTING_NAME],
+    );
+
+    const changed = normalizedValue !== previousValue;
+
+    if (changed && normalizedValue) {
+        const agreedForCurrentEdit = consumeProfilePronounsInputAgreement();
+        if (!agreedForCurrentEdit) {
+            const agreed = await requestTouAgreement({
+                agreementKey: PROFILE_PRONOUNS_AGREEMENT_KEY,
+            });
+            if (!agreed) {
+                restoreProfilePronounsInput(previousValue);
+                return { shouldSave: false };
+            }
+        }
+
+        try {
+            const validation = await callRobloxApiJson({
+                subdomain: 'contacts',
+                endpoint: `/v1/user/tag/validate?alias=${encodeURIComponent(normalizedValue)}`,
+                method: 'GET',
+                noCache: true,
+            });
+            const validationStatus = String(
+                validation?.status || '',
+            ).toLowerCase();
+            if (validationStatus !== 'success') {
+                restoreProfilePronounsInput(previousValue);
+                showSystemAlert(
+                    validationStatus === 'toolong'
+                        ? 'Pronouns must be 15 characters or fewer.'
+                        : "Roblox's filter rejected these pronouns. Try a different value.",
+                    'warning',
+                );
+                return { shouldSave: false };
+            }
+        } catch (error) {
+            restoreProfilePronounsInput(previousValue);
+            let validationErrorMessage =
+                'Pronouns could not be checked by Roblox. Please try again.';
+            if (error?.status === 400) {
+                validationErrorMessage =
+                    "Roblox's filter rejected these pronouns. Try a different value.";
+            } else if (error?.status === 429) {
+                validationErrorMessage =
+                    'The Roblox pronoun filter is busy. Please try again shortly.';
+            }
+            showSystemAlert(validationErrorMessage, 'warning');
+            return { shouldSave: false };
+        }
+    }
+
+    let apiSynced = false;
+    try {
+        const updatedValue = await updateUserSettingViaApi(
+            PROFILE_PRONOUNS_API_KEY,
+            normalizedValue || '',
+            {
+                throwOnError: true,
+                suppressErrorLog: true,
+            },
+        );
+        if (
+            updatedValue === false ||
+            normalizeProfilePronouns(updatedValue) !== normalizedValue
+        ) {
+            throw new Error('RoValra did not confirm the pronouns update.');
+        }
+        apiSynced = true;
+    } catch (error) {
+        console.warn(
+            'RoValra: Pronouns will remain local because API sync failed.',
+            error,
+        );
+    }
+
+    return {
+        shouldSave: true,
+        value: normalizedValue,
+        changed,
+        syncFailed: !apiSynced,
+    };
+}
 
 const isUnavailableSetting = (config) =>
     hasOwn(config, 'locked') || hasOwn(config, 'deprecated');
@@ -46,41 +181,6 @@ const getFeatureStatusPromptPills = () =>
         '<span class="rovalra-pill deprecated">Deprecated</span>',
     ].join('');
 
-function sanitizeCustomThemeSlots(value) {
-    if (!Array.isArray(value)) return [];
-
-    const slotsByIndex = new Map();
-
-    value
-        .slice(0, 5)
-        .forEach((slot, fallbackIndex) => {
-            const source = slot && typeof slot === 'object' ? slot : {};
-            if (!slot || typeof slot !== 'object') return;
-
-            const rawSlotIndex = Number(source.slot ?? source.index);
-            const slotIndex = Number.isFinite(rawSlotIndex)
-                ? Math.max(0, Math.min(4, Math.round(rawSlotIndex)))
-                : fallbackIndex;
-            const name =
-                typeof source.name === 'string' && source.name.trim()
-                    ? sanitizeString(source.name).slice(
-                        0,
-                        CUSTOM_THEME_NAME_MAX_LENGTH,
-                    )
-                    : `Custom Theme ${slotIndex + 1}`;
-            const themeSource = source.theme || source.colors || source;
-
-            slotsByIndex.set(slotIndex, {
-                slot: slotIndex,
-                name,
-                theme: sanitizeCustomTheme(themeSource),
-            });
-        });
-
-    return [...slotsByIndex.values()]
-        .sort((left, right) => left.slot - right.slot);
-}
-
 const shouldShowFeatureStatusPrompt = async (config) => {
     if (!isStatusLabeledOffByDefaultSetting(config)) return false;
 
@@ -98,6 +198,47 @@ const shouldShowFeatureStatusPrompt = async (config) => {
 const markFeatureStatusPromptAcknowledged = async () => {
     await chrome.storage.local.set({ [FEATURE_STATUS_PROMPT_ACK_KEY]: true });
 };
+
+function normalizeHttpUrlSetting(value) {
+    if (value === null || value === undefined) return null;
+
+    const trimmedValue = String(value).trim();
+    if (!trimmedValue) return null;
+
+    try {
+        const url = new URL(trimmedValue);
+        return url.protocol === 'http:' || url.protocol === 'https:'
+            ? trimmedValue
+            : INVALID_HTTP_URL;
+    } catch {
+        return INVALID_HTTP_URL;
+    }
+}
+
+async function restoreTextSettingInput(settingName) {
+    const input = document.getElementById(settingName);
+    if (!(input instanceof HTMLInputElement)) return;
+
+    const storedSettings = await chrome.storage.local.get([
+        settingName,
+        'rovalra_settings',
+    ]);
+    const storedValue =
+        storedSettings[settingName] ??
+        storedSettings.rovalra_settings?.[settingName] ??
+        '';
+
+    input.value = typeof storedValue === 'string' ? storedValue : '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+async function restoreTextSettingInputValue(settingName, value) {
+    const input = document.getElementById(settingName);
+    if (!(input instanceof HTMLInputElement)) return;
+
+    input.value = typeof value === 'string' ? value : '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
 
 function queueGradientNameSync(settingsOverride = {}) {
     if (gradientNameSyncTimeout) clearTimeout(gradientNameSyncTimeout);
@@ -139,6 +280,11 @@ export const syncDonatorTier = async () => {
         return null;
     }
 
+    if (inMemoryDonatorUserId !== currentUserId) {
+        inMemoryDonatorUserId = currentUserId;
+        inMemoryDonatorResponse = null;
+    }
+
     const state = (await CacheHandler.get(
         'donator_info',
         'sync_state',
@@ -152,6 +298,8 @@ export const syncDonatorTier = async () => {
         lastTier: 0,
         userId: null,
     };
+
+    state.cachedResponse = null;
 
     if (state.userId !== currentUserId) {
         state.lastSync = 0;
@@ -175,8 +323,8 @@ export const syncDonatorTier = async () => {
         state.priorityActive && isUrlChange && state.checksLeft > 0;
     const isExpired = now - state.lastSync > 5 * 60 * 1000;
 
-    if (state.cachedResponse && !isPriorityCheck && !isExpired) {
-        return state.cachedResponse;
+    if (inMemoryDonatorResponse && !isPriorityCheck && !isExpired) {
+        return inMemoryDonatorResponse;
     }
 
     donatorTierPromise = (async () => {
@@ -189,7 +337,7 @@ export const syncDonatorTier = async () => {
             });
 
             if (!response?.badges) {
-                return state.cachedResponse || null;
+                return inMemoryDonatorResponse || null;
             }
 
             const badges = response.badges;
@@ -218,8 +366,9 @@ export const syncDonatorTier = async () => {
             state.lastTier = tier;
             state.lastSync = Date.now();
             state.lastPath = currentPath;
-            state.cachedResponse = response;
+            inMemoryDonatorResponse = response;
             state.userId = currentUserId;
+            state.cachedResponse = null;
 
             await CacheHandler.set(
                 'donator_info',
@@ -245,7 +394,7 @@ export const syncDonatorTier = async () => {
                 error: error.message || error,
                 stack: error.stack,
             });
-            return state.cachedResponse || null;
+            return inMemoryDonatorResponse || null;
         } finally {
             donatorTierPromise = null;
         }
@@ -294,7 +443,8 @@ export const loadSettings = async () => {
                     );
                     reject(chrome.runtime.lastError);
                 } else {
-                    const remoteLocks = settings[REMOTE_SETTING_LOCKS_KEY] || {};
+                    const remoteLocks =
+                        settings[REMOTE_SETTING_LOCKS_KEY] || {};
                     delete settings[REMOTE_SETTING_LOCKS_KEY];
 
                     if (settings[REMOTE_SETTING_OVERRIDE_KEY] !== true) {
@@ -303,11 +453,12 @@ export const loadSettings = async () => {
                         }
                     }
 
-                    const normalisedSettings = settings;
-                    for (const [key, value] of Object.entries(forcedSettings)) {
-                        normalisedSettings[key] = value;
+                    for (const [key, value] of Object.entries(
+                        forcedSettings,
+                    )) {
+                        settings[key] = value;
                     }
-                    resolve(normalisedSettings);
+                    resolve(settings);
                 }
             },
         );
@@ -430,6 +581,8 @@ export const handleSaveSettings = async (settingName, value) => {
         const settingConfig = findSettingConfig(settingName);
 
         let sanitizedValue = value;
+        let profilePronounsChanged = false;
+        let profilePronounsSyncFailed = false;
 
         if (settingConfig) {
             switch (settingConfig.type) {
@@ -475,7 +628,55 @@ export const handleSaveSettings = async (settingName, value) => {
                     if (value === null) {
                         sanitizedValue = null;
                     } else if (typeof value === 'string') {
+                        if (settingConfig.validateHttpUrl) {
+                            const normalizedUrl =
+                                normalizeHttpUrlSetting(value);
+                            if (normalizedUrl === INVALID_HTTP_URL) {
+                                await restoreTextSettingInput(settingName);
+                                showSystemAlert(
+                                    'Enter a valid http:// or https:// image URL.',
+                                    'warning',
+                                );
+                                return;
+                            }
+                            sanitizedValue = normalizedUrl;
+                            await restoreTextSettingInputValue(
+                                settingName,
+                                sanitizedValue,
+                            );
+                            break;
+                        }
+
                         sanitizedValue = sanitizeString(value);
+
+                        if (settingConfig.trim) {
+                            sanitizedValue = sanitizedValue.trim();
+                        }
+
+                        sanitizedValue = applyCharacterReplacements(
+                            sanitizedValue,
+                            settingConfig.characterReplacements,
+                        );
+
+                        if (settingConfig.replaceSpecialCharactersWithPipe) {
+                            sanitizedValue =
+                                replacePronounSpecialCharacters(sanitizedValue);
+                        }
+
+                        if (
+                            Number.isInteger(settingConfig.maxLength) &&
+                            settingConfig.maxLength > 0
+                        ) {
+                            sanitizedValue = settingConfig.useGraphemeLength
+                                ? truncateProfilePronouns(
+                                      sanitizedValue,
+                                      settingConfig.maxLength,
+                                  )
+                                : sanitizedValue.slice(
+                                      0,
+                                      settingConfig.maxLength,
+                                  );
+                        }
 
                         if (
                             settingConfig.type === 'select' &&
@@ -587,14 +788,20 @@ export const handleSaveSettings = async (settingName, value) => {
                     }
                     break;
 
-                case 'themeEditor':
-                    sanitizedValue = sanitizeCustomTheme(value);
-                    break;
-
-                case 'themeSlots':
-                    sanitizedValue = sanitizeCustomThemeSlots(value);
+                case 'backgroundImage':
+                    sanitizedValue = sanitizeBackgroundImage(value);
                     break;
             }
+        }
+
+        if (settingName === PROFILE_PRONOUNS_SETTING_NAME) {
+            const pronounsUpdate =
+                await prepareProfilePronounsUpdate(sanitizedValue);
+            if (!pronounsUpdate.shouldSave) return;
+
+            sanitizedValue = pronounsUpdate.value;
+            profilePronounsChanged = pronounsUpdate.changed;
+            profilePronounsSyncFailed = pronounsUpdate.syncFailed;
         }
 
         const settings = { [settingName]: sanitizedValue };
@@ -698,6 +905,17 @@ export const handleSaveSettings = async (settingName, value) => {
                         }),
                     );
 
+                    if (profilePronounsChanged || profilePronounsSyncFailed) {
+                        showSystemAlert(
+                            profilePronounsSyncFailed
+                                ? 'Pronouns saved locally, but public API sync is currently unavailable.'
+                                : sanitizedValue
+                                  ? 'Pronouns updated!'
+                                  : 'Pronouns removed successfully!',
+                            profilePronounsSyncFailed ? 'warning' : 'success',
+                        );
+                    }
+
                     resolve();
                 }
             });
@@ -709,11 +927,34 @@ export const handleSaveSettings = async (settingName, value) => {
 };
 
 const syncToSettingsKey = (settingName, value) => {
-    chrome.storage.local.get('rovalra_settings', (result) => {
-        const settingsData = result.rovalra_settings || {};
-        settingsData[settingName] = value;
-        chrome.storage.local.set({ rovalra_settings: settingsData });
-    });
+    settingsKeySyncQueue = settingsKeySyncQueue
+        .catch(() => {})
+        .then(
+            () =>
+                new Promise((resolve, reject) => {
+                    chrome.storage.local.get('rovalra_settings', (result) => {
+                        if (chrome.runtime.lastError) {
+                            reject(chrome.runtime.lastError);
+                            return;
+                        }
+
+                        const settingsData = result.rovalra_settings || {};
+                        settingsData[settingName] = value;
+                        chrome.storage.local.set(
+                            { rovalra_settings: settingsData },
+                            () => {
+                                if (chrome.runtime.lastError) {
+                                    reject(chrome.runtime.lastError);
+                                } else {
+                                    resolve();
+                                }
+                            },
+                        );
+                    });
+                }),
+        );
+
+    return settingsKeySyncQueue;
 };
 
 export const buildSettingsKey = async () => {
@@ -832,17 +1073,14 @@ export const initSettings = async (settingsContent) => {
                                 settings[settingName] || setting.default,
                             );
                         }
-                    } else if (setting.type === 'themeEditor') {
-                        if (element.rovalraThemeEditorApi) {
-                            element.rovalraThemeEditorApi.setValue(
-                                settings[settingName] || setting.default,
-                            );
-                        }
                     } else if (
                         setting.type === 'input' ||
                         setting.type === 'color'
                     ) {
-                        element.value = settings[settingName] || '';
+                        const savedValue = settings[settingName] || '';
+                        element.value = setting.maxLength
+                            ? String(savedValue).slice(0, setting.maxLength)
+                            : savedValue;
                         element.dispatchEvent(
                             new Event('input', { bubbles: true }),
                         );
@@ -931,21 +1169,20 @@ export const initSettings = async (settingsContent) => {
                                 if (childElement.rovalraGradientApi) {
                                     childElement.rovalraGradientApi.setValue(
                                         settings[childName] ||
-                                        childSetting.default,
-                                    );
-                                }
-                            } else if (childSetting.type === 'themeEditor') {
-                                if (childElement.rovalraThemeEditorApi) {
-                                    childElement.rovalraThemeEditorApi.setValue(
-                                        settings[childName] ||
-                                        childSetting.default,
+                                            childSetting.default,
                                     );
                                 }
                             } else if (
                                 childSetting.type === 'input' ||
                                 childSetting.type === 'color'
                             ) {
-                                childElement.value = settings[childName] || '';
+                                const savedValue = settings[childName] || '';
+                                childElement.value = childSetting.maxLength
+                                    ? String(savedValue).slice(
+                                          0,
+                                          childSetting.maxLength,
+                                      )
+                                    : savedValue;
                                 childElement.dispatchEvent(
                                     new Event('input', { bubbles: true }),
                                 );
@@ -1131,7 +1368,8 @@ export const checkSettingLocks = async (settingsContent, currentSettings) => {
         'profile3DRenderForceDisabled',
     ]);
     const remoteLocks = await getRemoteSettingLocks();
-    const remoteOverride = currentSettings[REMOTE_SETTING_OVERRIDE_KEY] === true;
+    const remoteOverride =
+        currentSettings[REMOTE_SETTING_OVERRIDE_KEY] === true;
 
     const userTier = currentUserTier;
 
@@ -1173,7 +1411,7 @@ export const checkSettingLocks = async (settingsContent, currentSettings) => {
                         settingsContent,
                         isLocked,
                         conf.donatorReason ||
-                        'This is a donator-exclusive feature.',
+                            'This is a donator-exclusive feature.',
                         true,
                     );
                     if (isLocked) return true;
@@ -1324,7 +1562,9 @@ export function updateConditionalSettingsVisibility(
             element.closest('.child-setting-item') ||
             element.closest('.setting');
         if (wrapper) {
-            wrapper.style.display = settingsToHide.has(settingName) ? 'none' : '';
+            wrapper.style.display = settingsToHide.has(settingName)
+                ? 'none'
+                : '';
         }
 
         const separator = settingsContent.querySelector(
@@ -1617,7 +1857,7 @@ export function initializeSettingsEventListeners() {
 
         console.log(
             'Generated Environment JSON:\n' +
-            JSON.stringify(envConfig, null, 2),
+                JSON.stringify(envConfig, null, 2),
         );
         alert('Environment JSON has been printed to the console (F12).');
     });
@@ -1796,7 +2036,7 @@ export function initializeSettingsEventListeners() {
             const settingConfig = findSettingConfig(controlledSettingName);
             const defaultValue =
                 settingConfig?.default !== undefined &&
-                    settingConfig.default > 0
+                settingConfig.default > 0
                     ? settingConfig.default
                     : 1;
 
@@ -1887,7 +2127,9 @@ export function initializeSettingsEventListeners() {
                 if (settingConfig?.exclusiveWith) {
                     settingConfig.exclusiveWith.forEach(
                         (exclusiveSettingName) => {
-                            if (findSettingConfig(exclusiveSettingName) != null) {
+                            if (
+                                findSettingConfig(exclusiveSettingName) != null
+                            ) {
                                 const exclusiveElement = document.querySelector(
                                     `#${exclusiveSettingName}`,
                                 );
@@ -1931,7 +2173,11 @@ export function initializeSettingsEventListeners() {
                     );
                 }
             }
-        } else if (target.matches('input[type="text"], input:not([type])')) {
+        } else if (
+            target.matches(
+                'input[type="text"], input[type="url"], input:not([type])',
+            )
+        ) {
             value = target.value.trim() === '' ? null : target.value;
             savePromises.push(handleSaveSettings(settingName, value));
         } else if (target.matches('input[type="number"]')) {

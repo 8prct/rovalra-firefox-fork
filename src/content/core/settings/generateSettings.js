@@ -13,6 +13,7 @@ import DOMPurify from 'dompurify';
 import { addTooltip } from '../ui/tooltip.js';
 import { createButton } from '../ui/buttons.js';
 import { showConfirmationPrompt } from '../ui/confirmationPrompt.js';
+import { ensureTouAgreement } from '../ui/tou/touAgreement.js';
 import {
     getBatchThumbnails,
     createThumbnailElement,
@@ -22,9 +23,24 @@ import { createUserCard } from '../ui/profile/userCard.js';
 import { getAuthenticatedUserId } from '../user.js';
 import { getBorders } from '../configs/borders.js';
 import { applyBorderToContainer } from '../../features/profile/avatarBorder.js';
+import {
+    getProfilePronounsLength,
+    replacePronounSpecialCharacters,
+    truncateProfilePronouns,
+} from '../profile/pronouns.js';
 
 const DEFAULT_CONTRIBUTOR_ID = 447170745;
 const contributorCache = new Map();
+
+function applyCharacterReplacements(value, replacements) {
+    if (typeof value !== 'string' || !replacements) return value;
+
+    return Object.entries(replacements).reduce(
+        (result, [search, replacement]) =>
+            search ? result.split(search).join(String(replacement)) : result,
+        value,
+    );
+}
 
 async function attachContributors(container, config, isChild = false) {
     if (
@@ -313,6 +329,123 @@ function injectAvatarPreview(container, inputElement, settingName) {
     }
 }
 
+function normalizePreviewImageUrl(value) {
+    if (typeof value !== 'string') return null;
+
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return null;
+
+    try {
+        const url = new URL(trimmedValue);
+        return url.protocol === 'http:' || url.protocol === 'https:'
+            ? trimmedValue
+            : null;
+    } catch {
+        return null;
+    }
+}
+
+function createImageUrlPreview(inputElement, settingName) {
+    const previewWrapper = document.createElement('div');
+    previewWrapper.className = 'rovalra-preview-section';
+    previewWrapper.dataset.rovalraPreviewSection = settingName;
+    previewWrapper.style.cssText =
+        'display: flex; flex-direction: column; align-items: center; padding: 20px; background: var(--rovalra-container-background-color); border-radius: 12px; margin-top: 15px;';
+
+    const title = document.createElement('div');
+    title.style.cssText =
+        'font-weight: 700; font-size: 12px; text-transform: uppercase; margin-bottom: 10px; color: var(--rovalra-secondary-text-color);';
+    title.textContent = 'Preview';
+
+    const divider = document.createElement('div');
+    divider.className = 'setting-label-divider';
+    divider.style.width = '100%';
+    divider.style.marginBottom = '10px';
+
+    const image = document.createElement('img');
+    image.id = `preview-${settingName}`;
+    image.alt = 'Custom Roblox Banner Preview';
+    image.style.cssText =
+        'display: none; width: 64px; height: 64px; object-fit: contain; border-radius: 8px; border: 1px solid var(--rovalra-border-color); background: var(--rovalra-main-background-color); padding: 6px;';
+    let activePreviewUrl = null;
+
+    function clearPreview() {
+        activePreviewUrl = null;
+        image.onload = null;
+        image.onerror = null;
+        image.style.display = 'none';
+        delete image.dataset.rovalraPreviewImageUrl;
+        image.removeAttribute('src');
+    }
+
+    function updatePreview(value) {
+        const imageUrl = normalizePreviewImageUrl(value);
+        if (!imageUrl) {
+            clearPreview();
+            return;
+        }
+
+        if (image.dataset.rovalraPreviewImageUrl === imageUrl) {
+            if (image.complete && image.naturalWidth > 0) {
+                image.style.display = 'block';
+            }
+            return;
+        }
+
+        activePreviewUrl = imageUrl;
+        image.dataset.rovalraPreviewImageUrl = imageUrl;
+        image.onload = () => {
+            if (activePreviewUrl !== imageUrl) return;
+            image.style.display = 'block';
+        };
+        image.onerror = () => {
+            if (activePreviewUrl !== imageUrl) return;
+            clearPreview();
+        };
+        image.style.display = 'none';
+        image.src = imageUrl;
+
+        if (
+            activePreviewUrl === imageUrl &&
+            image.complete &&
+            image.naturalWidth > 0
+        ) {
+            image.style.display = 'block';
+        }
+    }
+
+    inputElement.addEventListener('input', () => {
+        updatePreview(inputElement.value);
+    });
+
+    const settingSavedHandler = (event) => {
+        if (event.detail?.name !== settingName) return;
+        updatePreview(event.detail.value || '');
+    };
+    document.addEventListener('rovalra:settingSaved', settingSavedHandler);
+
+    const observer = observeElement(`#preview-${settingName}`, () => {}, {
+        onRemove: () => {
+            document.removeEventListener(
+                'rovalra:settingSaved',
+                settingSavedHandler,
+            );
+            observer.disconnect();
+        },
+    });
+
+    previewWrapper.append(title, divider, image);
+
+    chrome.storage.local.get([settingName, 'rovalra_settings'], (result) => {
+        updatePreview(
+            result[settingName] ?? result.rovalra_settings?.[settingName] ?? '',
+        );
+    });
+    requestAnimationFrame(() => updatePreview(inputElement.value || ''));
+
+    return previewWrapper;
+}
+
 export function findSettingConfig(settingName) {
     for (const category of Object.values(SETTINGS_CONFIG)) {
         for (const [parentSettingName, parentSettingDef] of Object.entries(
@@ -458,8 +591,138 @@ export function generateSettingInput(settingName, setting, REGIONS = {}) {
 
         input.dataset.settingName = settingName;
 
+        if (setting.inputType) {
+            input.type = setting.inputType;
+        }
+
+        if (
+            setting.characterReplacements ||
+            setting.replaceSpecialCharactersWithPipe
+        ) {
+            const normalizeInputValue = (value) => {
+                let normalizedValue = applyCharacterReplacements(
+                    value,
+                    setting.characterReplacements,
+                );
+                if (setting.replaceSpecialCharactersWithPipe) {
+                    normalizedValue =
+                        replacePronounSpecialCharacters(normalizedValue);
+                }
+                if (
+                    setting.useGraphemeLength &&
+                    Number.isInteger(setting.maxLength) &&
+                    setting.maxLength > 0
+                ) {
+                    normalizedValue = truncateProfilePronouns(
+                        normalizedValue,
+                        setting.maxLength,
+                    );
+                }
+                return normalizedValue;
+            };
+
+            input.addEventListener('input', () => {
+                const originalValue = input.value;
+                const cursorPosition = input.selectionStart;
+                const normalizedValue = normalizeInputValue(originalValue);
+
+                if (normalizedValue === originalValue) return;
+
+                input.value = normalizedValue;
+                if (cursorPosition !== null) {
+                    const normalizedBeforeCursor = normalizeInputValue(
+                        originalValue.slice(0, cursorPosition),
+                    );
+                    input.setSelectionRange(
+                        normalizedBeforeCursor.length,
+                        normalizedBeforeCursor.length,
+                    );
+                }
+            });
+        }
+
+        if (setting.agreementKey) {
+            input.addEventListener('focus', () => {
+                if (input.dataset.rovalraAgreementRefocusBypass === 'true') {
+                    delete input.dataset.rovalraAgreementRefocusBypass;
+                    return;
+                }
+
+                if (input.dataset.rovalraAgreementPending === 'true') {
+                    return;
+                }
+
+                input.dataset.rovalraAgreementPending = 'true';
+                const inputWasReadOnly = input.readOnly;
+                let inputLockedByAgreement = false;
+
+                const lockInput = () => {
+                    inputLockedByAgreement = true;
+                    input.readOnly = true;
+                    input.blur();
+                };
+
+                const unlockInput = () => {
+                    if (!inputLockedByAgreement) return;
+                    input.readOnly = inputWasReadOnly;
+                    inputLockedByAgreement = false;
+                };
+
+                ensureTouAgreement(
+                    () => {
+                        unlockInput();
+                        delete input.dataset.rovalraAgreementPending;
+                        input.dataset.rovalraAgreementConfirmedForEdit = 'true';
+                        input.dataset.rovalraAgreementRefocusBypass = 'true';
+                        input.focus();
+                        queueMicrotask(() => {
+                            delete input.dataset.rovalraAgreementRefocusBypass;
+                        });
+                    },
+                    {
+                        agreementKey: setting.agreementKey,
+                        onPrompt: lockInput,
+                        onCancel: () => {
+                            unlockInput();
+                            delete input.dataset.rovalraAgreementPending;
+                            delete input.dataset
+                                .rovalraAgreementConfirmedForEdit;
+                            input.blur();
+                        },
+                    },
+                );
+            });
+        }
+
+        if (Number.isInteger(setting.maxLength) && setting.maxLength > 0) {
+            if (!setting.useGraphemeLength) {
+                input.maxLength = setting.maxLength;
+            }
+
+            if (setting.showCharacterCount) {
+                const counter = document.createElement('span');
+                counter.className = 'rovalra-setting-input-counter';
+                counter.setAttribute('aria-live', 'polite');
+
+                const updateCounter = () => {
+                    const currentLength = setting.useGraphemeLength
+                        ? getProfilePronounsLength(input.value)
+                        : input.value.length;
+                    counter.textContent = `${currentLength}/${setting.maxLength}`;
+                };
+
+                container.classList.add('rovalra-setting-input-with-counter');
+                input.addEventListener('input', updateCounter);
+                container.appendChild(counter);
+                updateCounter();
+            }
+        }
+
         container.style.marginLeft = 'auto';
-        container.style.width = '200px';
+        container.style.width =
+            setting.inputWidth ||
+            (setting.showCharacterCount ? '180px' : '200px');
+        container.style.maxWidth = '100%';
 
         return container;
     } else if (setting.type === 'gradient') {
@@ -735,6 +998,32 @@ export function generateSettingInput(settingName, setting, REGIONS = {}) {
             });
         }
         return button;
+    } else if (setting.type === 'buttonGroup') {
+        const container = document.createElement('div');
+        container.id = settingName;
+        container.dataset.settingName = settingName;
+        container.style.cssText =
+            'display: flex; flex-wrap: wrap; gap: 10px; margin-left: auto;';
+
+        for (const buttonConfig of setting.buttons || []) {
+            const button = createButton(
+                buttonConfig.text || 'Click Me',
+                buttonConfig.type || 'secondary',
+                { id: buttonConfig.id },
+            );
+            button.type = 'button';
+
+            if (buttonConfig.event) {
+                button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    document.dispatchEvent(new CustomEvent(buttonConfig.event));
+                });
+            }
+
+            container.appendChild(button);
+        }
+
+        return container;
     } else if (setting.type === 'list') {
         const listContainer = document.createElement('div');
         listContainer.id = settingName;
@@ -880,6 +1169,12 @@ export function generateSingleSettingHTML(settingName, setting, REGIONS = {}) {
         injectAvatarPreview(settingContainer, inputElement, settingName);
     }
 
+    if (setting.imageUrlPreview === true) {
+        settingContainer.appendChild(
+            createImageUrlPreview(inputElement, settingName),
+        );
+    }
+
     if (setting.description) {
         const divider = document.createElement('div');
         divider.className = 'setting-label-divider';
@@ -892,8 +1187,8 @@ export function generateSingleSettingHTML(settingName, setting, REGIONS = {}) {
             const descElement = document.createElement('div');
             descElement.className = 'setting-description';
             // No need in sanitizing, it's trusted data
-            descElement.innerHTML = parseMarkdown(String(desc), themeColors),  // Verified
-            settingContainer.appendChild(descElement);
+            ((descElement.innerHTML = parseMarkdown(String(desc), themeColors)), // Verified
+                settingContainer.appendChild(descElement));
         });
     }
 
@@ -1017,6 +1312,12 @@ export function generateSingleSettingHTML(settingName, setting, REGIONS = {}) {
                 injectAvatarPreview(childContainer, childInput, childName);
             }
 
+            if (childSetting.imageUrlPreview === true) {
+                childContainer.appendChild(
+                    createImageUrlPreview(childInput, childName),
+                );
+            }
+
             if (childSetting.description) {
                 const childDivider = document.createElement('div');
                 childDivider.className = 'setting-label-divider';
@@ -1030,8 +1331,11 @@ export function generateSingleSettingHTML(settingName, setting, REGIONS = {}) {
                 childDescriptions.forEach((desc) => {
                     const childDescElement = document.createElement('div');
                     childDescElement.className = 'setting-description';
-                    childDescElement.innerHTML = parseMarkdown(String(desc), themeColors),  // Verified
-                    childContainer.appendChild(childDescElement);
+                    ((childDescElement.innerHTML = parseMarkdown(
+                        String(desc),
+                        themeColors,
+                    )), // Verified
+                        childContainer.appendChild(childDescElement));
                 });
             }
 

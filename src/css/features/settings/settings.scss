@@ -44,6 +44,11 @@ body.rovalra-settings-page {
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
+    #setting-container-profilePronouns,
+    #setting-container-profileNotesEnabled {
+        padding-top: 8px;
+    }
+
     .setting-controls > label {
         color: var(--rovalra-main-text-color) !important;
         margin-right: 10px;
@@ -304,6 +309,29 @@ body.rovalra-settings-page {
 
     .rovalra-contributors-error {
         color: var(--rovalra-secondary-text-color);
+    }
+
+    #rovalra-donator-perks-donation-button {
+        & > span > svg {
+            position: absolute;
+            top: 20%;
+            left: 35%;
+            transition: opacity 250ms;
+            opacity: 0;
+            pointer-events: none;
+        }
+        & > span > span {
+            transition: opacity 250ms;
+        }
+
+        &[data-rovalra-donator-perks-donation-button-loading='true'] > span {
+            & > svg {
+                opacity: 1;
+            }
+            & > span {
+                opacity: 0;
+            }
+        }
     }
 
     .rovalra-donator-perks-compare {

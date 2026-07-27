@@ -2152,33 +2152,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendResponse({ success: true });
             return false;
 
-        case 'checkPermission': {
-            const permissions = normalizePermissions(request.permission);
-            chrome.permissions.contains({ permissions }, (granted) => {
-                sendResponse({ granted });
-            });
+        case 'checkPermission':
+            chrome.permissions.contains(
+                { permissions: normalizePermissions(request.permission) },
+                (granted) => {
+                    sendResponse({ granted });
+                },
+            );
             return true;
-        }
 
         case 'requestPermission': {
-            const permissions = normalizePermissions(request.permission);
-            const needsPrompt = permissions.filter((name) => name !== 'menus');
-
-            if (needsPrompt.length === 0) {
+            const requestedPermissions = normalizePermissions(
+                request.permission,
+            ).filter((permission) => permission !== 'menus');
+            if (requestedPermissions.length === 0) {
                 sendResponse({ granted: true });
                 return false;
             }
 
-            const requestId = `permission_${Date.now()}_${Math.random()
-                .toString(36)
-                .slice(2)}`;
-            const pageUrl = chrome.runtime.getURL(
+            const requestId = `permission_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+            const url = chrome.runtime.getURL(
                 `public/Assets/permission_request.html?permissions=${encodeURIComponent(
-                    JSON.stringify(needsPrompt),
+                    JSON.stringify(requestedPermissions),
                 )}&requestId=${encodeURIComponent(requestId)}`,
             );
 
-            const resultPromise = new Promise((resolve) => {
+            const result = new Promise((resolve) => {
                 const listener = (message) => {
                     if (
                         message.action === 'permissionRequestResult' &&
@@ -2188,7 +2187,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         resolve(!!message.granted);
                     }
                 };
-
                 chrome.runtime.onMessage.addListener(listener);
                 setTimeout(() => {
                     chrome.runtime.onMessage.removeListener(listener);
@@ -2197,26 +2195,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             });
 
             chrome.windows.create({
-                url: pageUrl,
+                url,
                 type: 'popup',
                 width: 480,
                 height: 340,
             });
-
-            resultPromise.then((granted) => sendResponse({ granted }));
+            result.then((granted) => sendResponse({ granted }));
             return true;
         }
 
         case 'revokePermission': {
-            const permissions = normalizePermissions(
-                request.permission,
-            ).filter((name) => name !== 'menus');
-
+            const permissions = normalizePermissions(request.permission).filter(
+                (permission) => permission !== 'menus',
+            );
             if (permissions.length === 0) {
                 sendResponse({ revoked: false });
                 return false;
             }
-
             chrome.permissions.remove(
                 { permissions },
                 (removed) => {

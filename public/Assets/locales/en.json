@@ -1,4 +1,7 @@
 {
+    "items": {
+        "hiddenFromMarketplace": "This item is hidden from the marketplace"
+    },
     "homeLayout": {
         "untitled": "Untitled",
         "empty": "RoValra was unable to find the layout, refresh and try again.",
@@ -28,6 +31,30 @@
         "disabled": "Disabled",
         "show": "Show",
         "hide": "Hide"
+    },
+    "topbarLayout": {
+        "empty": "RoValra was unable to find any supported topbar items.",
+        "reset": "Reset",
+        "save": "Save",
+        "overlayTitle": "Topbar Layout",
+        "button": "Topbar Layout",
+        "disabled": "Required",
+        "show": "Show",
+        "hide": "Hide",
+        "labels": {
+            "logo": "Roblox Logo",
+            "charts": "Charts",
+            "marketplace": "Marketplace",
+            "create": "Create",
+            "robux": "Robux",
+            "search": "Search",
+            "profile": "Profile",
+            "qol": "Status",
+            "topbarLayout": "Topbar Layout",
+            "notifications": "Notifications",
+            "robuxBalance": "Robux Balance",
+            "settings": "Settings"
+        }
     },
     "underratedGames": {
         "topic": "Underrated Games",
@@ -69,6 +96,7 @@
     "categorizeWearing": {
         "currentlyWearing": "Currently Wearing",
         "items": "Items",
+        "cosmetics": "Cosmetics",
         "bodyParts": "Body Parts",
         "animations": "Animations",
         "emotes": "Emotes"
@@ -201,7 +229,8 @@
         "setInactive": "Set Inactive",
         "setActive": "Set Active",
         "noServersFound": "No {{status}} private servers found.",
-        "byCreator": "By "
+        "byCreator": "By ",
+        "allowJoining": "Allow Joining"
     },
     "firstAccount": {
         "label": "First Account",
@@ -214,6 +243,42 @@
         "label": "Theme",
         "light": "Light",
         "dark": "Dark"
+    },
+    "customThemeEditor": {
+        "background": {
+            "title": "Customize Image Settings",
+            "source": "Image Source",
+            "opacity": "Image Opacity",
+            "customSize": "Custom Scale",
+            "blur": "Blur",
+            "overrideTopbarSidebar": "Transparent Mode",
+            "size": {
+                "label": "Background Size",
+                "cover": "Cover",
+                "contain": "Contain",
+                "auto": "Auto",
+                "custom": "Custom"
+            },
+            "position": {
+                "label": "Background Position",
+                "center": "Center",
+                "top": "Top",
+                "bottom": "Bottom",
+                "left": "Left",
+                "right": "Right",
+                "topleft": "Top Left",
+                "topright": "Top Right",
+                "bottomleft": "Bottom Left",
+                "bottomright": "Bottom Right"
+            },
+            "overlay": {
+                "color": "Overlay Color",
+                "opacity": "Overlay Opacity"
+            },
+            "errors": {
+                "invalidUrl": "Enter a valid https image URL."
+            }
+        }
     },
     "previousPrice": {
         "offSale": "Off Sale",
@@ -330,7 +395,9 @@
             "contributorTooltips": {
                 "146089324": "WoozyNate made fisch, which is where the old RoValra logo is from. You should check out fisch!",
                 "1337447242": "Made the new logo and all store page images.",
-                "795922138": "Came up with the name 'RoValra' as a joke, which was too funny not to use."
+                "795922138": "Came up with the name 'RoValra' as a joke, which was too funny not to use.",
+                "2974594300": "UI Improvements, bug fixes, and other contributions.",
+                "170038374": "Made concepts which some RoValra features are based on."
             },
             "sortLabel": "Sort contributors",
             "sortMost": "Most",
@@ -435,6 +502,12 @@
         "deleteSearchHistoryTitle": "Delete Search History",
         "deleteSearchHistoryMessage": "Are you sure you want to delete this search history entry?",
         "delete": "Delete"
+    },
+    "friendOwnership": {
+        "pillLabel": "{{count}} Friends own",
+        "pillTooltip": "See which friends own this item",
+        "overlayTitle": "{{count}} Friends own this item",
+        "unknownUser": "User {{id}}"
     },
     "regionPlayButton": {
         "ariaLabel": "Select or Join Preferred Server Region",
@@ -983,6 +1056,30 @@
         "joinedLabel": "Joined",
         "unknown": "Unknown"
     },
+    "showcase": {
+        "tab": "Showcase",
+        "favoriteGame": "Favourite experience",
+        "favoriteGroup": "Favourite community",
+        "chooseGame": "Choose an experience to feature on your profile.",
+        "noFeaturedGame": "No featured experience yet. :C",
+        "chooseGroup": "Choose a community to feature on your profile.",
+        "noFeaturedGroup": "No featured community yet. :,(",
+        "searchGame": "Search for an experience to feature",
+        "searchGroup": "Search for a community to feature",
+        "clearGame": "Clear favourite experience",
+        "clearGroup": "Clear favourite community",
+        "gameOptions": "Favourite experience options",
+        "groupOptions": "Favourite community options",
+        "by": "By",
+        "maturity": "Maturity",
+        "maturityUnavailable": "Maturity unavailable",
+        "members": "{{count}} members",
+        "noResultsGame": "Unable to find experience.",
+        "noResultsGroup": "Unable to find community.",
+        "unknownExperience": "Unknown experience",
+        "unknownCommunity": "Unknown community",
+        "verifiedBadge": "Verified Badge Icon"
+    },
     "profileCustomization": {
         "pill": "Customization",
         "pillTooltip": "Switch your avatar borders.",
@@ -1005,6 +1102,21 @@
         "noBorders": "No borders found.",
         "noBordersInTab": "No borders found in this tab.",
         "failedToLoad": "Failed to load your borders. Please try again later."
+    },
+    "profileNotes": {
+        "ariaLabel": "Private profile note",
+        "heading": "Note (only visible to you)",
+        "headingTooltip": "This note is stored only in this browser and is never sent to Roblox or RoValra.",
+        "addNote": "Click to add a note",
+        "editAriaLabel": "Edit private profile note",
+        "addAriaLabel": "Add private profile note",
+        "displayTooltip": "Click to edit. Notes are saved only in this browser.",
+        "inputPlaceholder": "Add a private note",
+        "inputTooltip": "Saved when you click outside. Press Escape to cancel or Ctrl+Enter to save."
+    },
+    "profilePronouns": {
+        "label": "Pronouns",
+        "ariaLabel": "Pronouns: {{pronouns}}"
     },
     "profile": {
         "currencyTransfer": "Send Robux",
@@ -1044,6 +1156,13 @@
             "privateServersCreatedSmall": "Private servers created for free",
             "robuxSentSmall": "Robux sent to friends",
             "delayNotice": "All data shown here is delayed by 1 day"
+        },
+        "transferLimits": {
+            "dailyLimitLeft": "Daily limit left",
+            "monthlyLimitLeft": "Monthly limit left",
+            "sentToday": "Sent today",
+            "sentThisMonth": "Sent this month",
+            "caption": "Daily limit is {{dailyLimit}}. Monthly limit is {{monthlyLimit}}. Updates every 5 minutes. The remaining are estimates and may be inaccurate."
         },
         "privateServerTooltip": {
             "tooltipText": "Original Price: <b>{{originalPrice}} Robux</b><br>Currently shows as <b>Free</b> due to Roblox Plus."

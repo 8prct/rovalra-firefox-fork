@@ -9,6 +9,7 @@ import {
     removeStylesheet,
 } from '../../../core/ui/cssInjector.js';
 import { callRobloxApiJson } from '../../../core/api.js';
+import { getUserAvatar } from '../../../core/apis/avatar.js';
 import { createSquareButton } from '../../../core/ui/profile/header/squarebutton.js';
 import { createOverlay } from '../../../core/ui/overlay.js';
 import { createDropdown } from '../../../core/ui/dropdown.js';
@@ -45,13 +46,14 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { safeHtml } from '../../../core/packages/dompurify.js';
-import {backgroundRendererRequests} from '../../../core/utils/renderer.js'
+import { backgroundRendererRequests } from '../../../core/utils/renderer.js';
 FLAGS.ENABLE_API_MESH_CACHE = false;
 FLAGS.ENABLE_API_RBX_CACHE = false;
 FLAGS.USE_WORKERS = false;
 FLAGS.ONLINE_ASSETS = true;
+FLAGS.AUDIO_ENABLED = false;
 
-backgroundRendererRequests()
+backgroundRendererRequests();
 
 let currentRig = null;
 let currentRigType = null;
@@ -1779,10 +1781,7 @@ async function preloadAvatar(userId = getUserIdFromUrl()) {
                     'tooltipText',
                     'tooltipLink',
                 ]),
-                callRobloxApiJson({
-                    subdomain: 'avatar',
-                    endpoint: `/v2/avatar/users/${requestedUserId}/avatar`,
-                }),
+                getUserAvatar(requestedUserId),
             ]);
 
             if (activeProfileRenderUserId !== requestedUserId) return null;

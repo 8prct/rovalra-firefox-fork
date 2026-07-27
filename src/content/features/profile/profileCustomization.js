@@ -386,7 +386,7 @@ async function renderOwnedBorderPicker(container, userId) {
             await Promise.all([
                 getBorders(),
                 getOwnedBorders(),
-                getUserSettings(userId, { noCache: true }).catch(() => null),
+                getUserSettings(userId).catch(() => null),
                 getAuthedUserData(userId),
             ]);
 
@@ -810,7 +810,10 @@ async function initProfileCustomization() {
             if (String(getUserIdFromUrl()) !== String(profileUserId)) return;
 
             const targetContainer = username.parentElement;
-            if (!targetContainer.isConnected || !targetContainer.contains(username))
+            if (
+                !targetContainer.isConnected ||
+                !targetContainer.contains(username)
+            )
                 return;
             if (
                 targetContainer.querySelector(
@@ -834,10 +837,11 @@ async function initProfileCustomization() {
                 fontSize: '11px',
                 lineHeight: '18px',
                 width: 'fit-content',
-                marginTop: '6px',
+                marginTop: '0px',
             });
             pill.addEventListener('click', () => {
-                if (String(getUserIdFromUrl()) !== String(profileUserId)) return;
+                if (String(getUserIdFromUrl()) !== String(profileUserId))
+                    return;
                 openCustomizationOverlay(profileUserId);
             });
 

@@ -10,6 +10,7 @@ import {
     CFrame,
 } from 'roavatar-renderer';
 import { callRobloxApiJson } from '../../core/api';
+import { getUserAvatar } from '../../core/apis/avatar.js';
 import { getAuthenticatedUserId } from '../../core/user';
 import { getPlaceIdFromUrl } from '../../core/idExtractor';
 import { createDropdown } from '../../core/ui/dropdown';
@@ -28,6 +29,7 @@ FLAGS.ENABLE_API_MESH_CACHE = true;
 FLAGS.ENABLE_API_RBX_CACHE = false;
 FLAGS.USE_WORKERS = true;
 FLAGS.ONLINE_ASSETS = true;
+FLAGS.AUDIO_ENABLED = false;
 
 backgroundRendererRequests();
 
@@ -931,10 +933,7 @@ async function loadOgAvatar() {
 
     //get avatar data for the user
     if (!ogAvatarDataLoaded) {
-        const avatarData = await callRobloxApiJson({
-            subdomain: 'avatar',
-            endpoint: `/v2/avatar/users/${userId}/avatar`,
-        });
+        const avatarData = await getUserAvatar(userId);
         ogAvatarData.fromJson(avatarData);
         ogAvatarData.playerAvatarType = avatarData.playerAvatarType;
     }

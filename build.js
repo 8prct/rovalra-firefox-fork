@@ -61,8 +61,7 @@ try {
 const bannerText = `/*!
  * ${pkg.name} v${pkg.version}
  * Firefox/Zen port maintained by 8prct
- * Fork: https://github.com/8prct/rovalra-firefox-fork
- * Original project by NotValra
+ * Original RoValra by NotValra and contributors
  * License: GPL-3.0
  * Upstream: https://github.com/NotValra/RoValra
  * This extension is provided AS-IS without warranty.

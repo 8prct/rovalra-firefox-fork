@@ -17,8 +17,18 @@ import {
     GILBERT_USER_ID,
 } from '../configs/userIds.js';
 import * as cache from '../storage/cacheHandler.js';
+import { normalizeProfilePronouns } from '../profile/pronouns.js';
 
 const GRADIENT_NAME_API_KEY = 'GradientName';
+
+function extractProfilePronouns(apiSettings) {
+    const value =
+        apiSettings?.pronouns ??
+        apiSettings?.Pronouns ??
+        apiSettings?.user_tag ??
+        apiSettings?.userTag;
+    return normalizeProfilePronouns(value);
+}
 
 const BATCH_MAX_SIZE = 50;
 const BATCH_DELAY_MS = 10;
@@ -41,13 +51,24 @@ function assertValidUserId(userId) {
     }
 }
 
-async function saveToCache(cacheKey, settings) {
+async function saveToCache(cacheKey, settings, { memoryOnly = false } = {}) {
     const cacheData = {
         data: settings,
         timestamp: Date.now(),
     };
     memoryCache.set(cacheKey, cacheData);
-    await cache.set('user_settings', cacheKey, cacheData, 'local');
+    if (!memoryOnly) {
+        await cache.set('user_settings', cacheKey, cacheData, 'local');
+    }
+}
+
+async function invalidateAuthenticatedUserSettingsCache() {
+    const authenticatedUserId = await getAuthenticatedUserId();
+    if (!authenticatedUserId) return;
+
+    const cacheKey = String(authenticatedUserId);
+    memoryCache.delete(cacheKey);
+    await cache.remove('user_settings', cacheKey, 'local');
 }
 
 async function fetchAndProcessSettings(userId, options = {}) {
@@ -61,7 +82,7 @@ async function fetchAndProcessSettings(userId, options = {}) {
     let apiProvidedMeaningfulSettings = false;
     try {
         let data;
-        if (isOwnProfile) {
+        if (isOwnProfile && !options.forcePublicEndpoint) {
             const token = await getValidAccessToken(false, false);
             if (token) {
                 data = await callRobloxApiJson({
@@ -69,7 +90,7 @@ async function fetchAndProcessSettings(userId, options = {}) {
                     subdomain: 'apis',
                     endpoint: '/v1/auth/settings',
                     method: 'GET',
-                    noCache: true,
+                    retryOnTransientStatus: false,
                 });
 
                 if (data.status === 'success' && data.setting) {
@@ -86,7 +107,8 @@ async function fetchAndProcessSettings(userId, options = {}) {
                 subdomain: 'apis',
                 endpoint: `/v1/users/${userId}/settings`,
                 method: 'GET',
-                noCache: isOwnProfile,
+                noCache: options.noCache || isOwnProfile,
+                retryOnTransientStatus: false,
             });
         }
 
@@ -102,6 +124,9 @@ async function fetchAndProcessSettings(userId, options = {}) {
                 !apiSettings[GRADIENT_NAME_API_KEY] &&
                 !apiSettings.GradientName &&
                 !apiSettings.gradientName &&
+                !extractProfilePronouns(apiSettings) &&
+                !Number(apiSettings.fav_game) &&
+                !Number(apiSettings.fav_group) &&
                 Object.keys(apiSettings).length <= 4
             ) {
                 apiProvidedMeaningfulSettings = false;
@@ -151,13 +176,17 @@ async function fetchAndProcessSettings(userId, options = {}) {
         gradient: finalGradient,
         GradientName: finalGradientName,
         border: finalBorder,
+        pronouns: extractProfilePronouns(apiSettings),
         Views: Number(apiSettings.Views) || 0,
         hide_views:
-            apiSettings.hide_views === 'true' || apiSettings.hide_views === true,
+            apiSettings.hide_views === 'true' ||
+            apiSettings.hide_views === true,
         canUseApi: apiProvidedMeaningfulSettings,
         anonymous_leaderboard:
             apiSettings.anonymous_leaderboard === 'true' ||
             apiSettings.anonymous_leaderboard === true,
+        fav_game: Number(apiSettings.fav_game) || 0,
+        fav_group: Number(apiSettings.fav_group) || 0,
     };
 }
 
@@ -165,8 +194,10 @@ async function processBatchQueue() {
     if (batchInProgress || batchQueue.length === 0) return;
 
     batchInProgress = true;
-    const currentBatch = [...batchQueue];
-    batchQueue = [];
+    // Only remove the portion that is sent in this request. The remaining
+    // entries stay queued for the next batch instead of falling back to one
+    // request per user.
+    const currentBatch = batchQueue.splice(0, BATCH_MAX_SIZE);
     clearTimeout(batchTimeout);
     batchTimeout = null;
 
@@ -182,9 +213,7 @@ async function processBatchQueue() {
                 (id, index, self) =>
                     String(id) !== authenticatedUserId &&
                     self.indexOf(id) === index,
-            )
-            .slice(0, BATCH_MAX_SIZE);
-
+            );
         const userIdsToFetchStrings = userIdsToFetch.map((id) => String(id));
 
         if (userIdsToFetch.length > 0) {
@@ -196,6 +225,7 @@ async function processBatchQueue() {
                 subdomain: 'apis',
                 endpoint: `/v1/users/settings?user_ids=${userIdsToFetchStrings.join(',')}`,
                 method: 'GET',
+                retryOnTransientStatus: false,
             });
 
             if (data.status === 'success' && data.settings) {
@@ -216,7 +246,9 @@ async function processBatchQueue() {
                             item.options,
                         );
 
-                        await saveToCache(cacheKey, settings);
+                        await saveToCache(cacheKey, settings, {
+                            memoryOnly: cacheKey === authenticatedUserId,
+                        });
                         processedKeys.add(cacheKey);
 
                         const resolvers = pendingResolvers.get(cacheKey);
@@ -237,7 +269,9 @@ async function processBatchQueue() {
                     batchItem.options,
                 );
 
-                await saveToCache(cacheKey, settings);
+                await saveToCache(cacheKey, settings, {
+                    memoryOnly: cacheKey === authenticatedUserId,
+                });
                 processedKeys.add(cacheKey);
 
                 const resolvers = pendingResolvers.get(cacheKey);
@@ -300,6 +334,9 @@ async function processApiSettings(userId, apiSettings, options) {
             !apiSettings[GRADIENT_NAME_API_KEY] &&
             !apiSettings.GradientName &&
             !apiSettings.gradientName &&
+            !extractProfilePronouns(apiSettings) &&
+            !Number(apiSettings.fav_game) &&
+            !Number(apiSettings.fav_group) &&
             Object.keys(apiSettings).length <= 4
         ) {
             apiProvidedMeaningfulSettings = false;
@@ -345,13 +382,17 @@ async function processApiSettings(userId, apiSettings, options) {
         gradient: finalGradient,
         GradientName: finalGradientName,
         border: finalBorder,
+        pronouns: extractProfilePronouns(apiSettings),
         Views: Number(apiSettings.Views) || 0,
         hide_views:
-            apiSettings.hide_views === 'true' || apiSettings.hide_views === true,
+            apiSettings.hide_views === 'true' ||
+            apiSettings.hide_views === true,
         canUseApi: apiProvidedMeaningfulSettings,
         anonymous_leaderboard:
             apiSettings.anonymous_leaderboard === 'true' ||
             apiSettings.anonymous_leaderboard === true,
+        fav_game: Number(apiSettings.fav_game) || 0,
+        fav_group: Number(apiSettings.fav_group) || 0,
     };
 }
 
@@ -366,16 +407,18 @@ export async function getUserSettings(userId, options = {}) {
 
     const cacheKey = strUserId;
 
-    if (!options.noCache && !isOwnProfile) {
+    if (!options.noCache) {
         const memCached = memoryCache.get(cacheKey);
         if (memCached) {
-            const staleThreshold = 300000;
+            const staleThreshold = isOwnProfile ? 60000 : 300000;
             const isStale =
                 Date.now() - (memCached.timestamp || 0) > staleThreshold;
             if (isStale && !pendingResolvers.has(cacheKey)) {
                 if (options.disableBatch) {
                     fetchAndProcessSettings(userId, options).then((settings) =>
-                        saveToCache(cacheKey, settings),
+                        saveToCache(cacheKey, settings, {
+                            memoryOnly: true,
+                        }),
                     );
                 } else {
                     batchQueue.push({ userId, options });
@@ -396,16 +439,20 @@ export async function getUserSettings(userId, options = {}) {
             return memCached.data;
         }
 
-        const cached = await cache.get('user_settings', cacheKey, 'local');
+        const cached = !isOwnProfile
+            ? await cache.get('user_settings', cacheKey, 'local')
+            : null;
         if (cached) {
             memoryCache.set(cacheKey, cached);
-            const staleThreshold = 300000;
+            const staleThreshold = isOwnProfile ? 60000 : 300000;
             const isStale =
                 Date.now() - (cached.timestamp || 0) > staleThreshold;
             if (isStale && !pendingResolvers.has(cacheKey)) {
                 if (options.disableBatch) {
                     fetchAndProcessSettings(userId, options).then((settings) =>
-                        saveToCache(cacheKey, settings),
+                        saveToCache(cacheKey, settings, {
+                            memoryOnly: false,
+                        }),
                     );
                 } else {
                     batchQueue.push({ userId, options });
@@ -435,7 +482,9 @@ export async function getUserSettings(userId, options = {}) {
 
     if (options.disableBatch) {
         const settings = await fetchAndProcessSettings(userId, options);
-        await saveToCache(cacheKey, settings);
+        await saveToCache(cacheKey, settings, {
+            memoryOnly: isOwnProfile,
+        });
 
         return settings;
     }
@@ -469,28 +518,41 @@ export async function updateUserSettingViaApi(key, value, options = {}) {
             endpoint: '/v1/auth/settings',
             method: 'POST',
             body: JSON.stringify({ key, value: apiValue }),
+            retryOnTransientStatus: false,
         });
         if (
             response &&
             response.status === 'success' &&
             response.setting &&
-            response.setting.key === key &&
-            response.message === 'Updated successfully.'
+            response.setting.key === key
         ) {
+            await invalidateAuthenticatedUserSettingsCache();
             return response.setting.value;
+        }
+
+        if (
+            response?.status === 'success' &&
+            response.settings &&
+            Object.prototype.hasOwnProperty.call(response.settings, key)
+        ) {
+            await invalidateAuthenticatedUserSettingsCache();
+            return response.settings[key];
         }
         return false;
     } catch (error) {
         if (isTemporaryLimitedError(error)) {
             const moderationStatus =
                 await refreshModerationStatusAfterLimitedError(error);
-            error.userMessage = getTemporaryLimitedUserMessage(moderationStatus);
+            error.userMessage =
+                getTemporaryLimitedUserMessage(moderationStatus);
         }
 
-        console.error(
-            `RoValra: Failed to update setting '${key}' via API.`,
-            error,
-        );
+        if (!options.suppressErrorLog) {
+            console.error(
+                `RoValra: Failed to update setting '${key}' via API.`,
+                error,
+            );
+        }
         if (options.throwOnError) throw error;
         return false;
     }

@@ -3,12 +3,7 @@ import {
     TRANSACTION_FIAT_CURRENCY_OPTIONS,
     TRANSACTION_FIAT_RATE_OPTIONS,
 } from '../transactions/fiatConfig.js';
-import { DEFAULT_CUSTOM_THEME } from '../themeCustom.js';
-
-const isAprilFools = () => {
-    const d = new Date();
-    return d.getMonth() === 3 && d.getDate() <= 7;
-};
+import { DEFAULT_BACKGROUND_IMAGE } from '../backgroundImage.js';
 
 // Settings config (not developer settings)
 
@@ -98,6 +93,12 @@ export const SETTINGS_CONFIG = {
                 description: [
                     'This feature shows an items dependencies which means you are able to view the texture, mesh and more of an item.',
                 ],
+                type: 'checkbox',
+                default: true,
+            },
+            friendOwnershipEnabled: {
+                label: 'Friends Who Own the Item',
+                description: 'Shows which of your friends own the item.',
                 type: 'checkbox',
                 default: true,
             },
@@ -208,13 +209,13 @@ export const SETTINGS_CONFIG = {
                 },
             },
             wideGameTileStatsEnabled: {
-                label: 'Wide Experience Tile Stats',
+                label: 'Player Counts on Wide Tiles',
                 description: [
                     'Shows the concurrent player count alongside the rating on wide experience tiles.',
                 ],
                 type: 'checkbox',
                 default: true,
-                contributors: ['2963377564'],
+                contributors: ['2963377564', '2333236354'],
             },
             whatamIJoiningEnabled: {
                 label: 'What Am I Joining',
@@ -580,11 +581,62 @@ export const SETTINGS_CONFIG = {
                 default: false,
                 contributors: ['9502859424'],
             },
+            profilePronouns: {
+                label: 'Profile Pronouns',
+                description: [
+                    'Displays your pronouns beside your username on your profile for other RoValra users.',
+                    'Maximum 15 characters.',
+                    'Emojis and spaces are allowed. Special characters such as /, comma, or ; are changed to |.',
+                ],
+                type: 'input',
+                placeholder: 'Enter Pronouns',
+                maxLength: 15,
+                showCharacterCount: true,
+                useGraphemeLength: true,
+                trim: true,
+                replaceSpecialCharactersWithPipe: true,
+                agreementKey: 'rovalra_pronouns_guidelines_agreed',
+                default: null,
+                contributors: ['10646979010'],
+            },
+            profileNotesEnabled: {
+                label: 'Profile Notes',
+                description: [
+                    'Adds a private note field to Roblox profiles.',
+                    'Notes are stored only locally and are never shared to RoValra or Roblox.',
+                    'Maximum 256 characters.',
+                ],
+                type: 'checkbox',
+                default: true,
+                storageKey: 'rovalra_profile_notes',
+                contributors: ['10646979010'],
+                childSettings: {
+                    profileNotesBackup: {
+                        label: 'Notes Backup',
+                        description: [
+                            'Export all profile notes or import them from a .json file.',
+                            'Imported notes are merged with notes already stored in this browser.',
+                        ],
+                        type: 'buttonGroup',
+                        buttons: [
+                            {
+                                id: 'export-rovalra-profile-notes',
+                                text: 'Export Notes',
+                            },
+                            {
+                                id: 'import-rovalra-profile-notes',
+                                text: 'Import Notes',
+                            },
+                        ],
+                    },
+                },
+            },
             profileViewsEnabled: {
                 label: 'Profile Views',
                 description: [
                     'Shows profile view counts on profiles.',
                     'Disabling this hides profile views locally and hides your profile views from other RoValra users.',
+                    'Credit to [syra](https://www.roblox.com/users/170038374/profile) for making a concept which this feature is based on.',
                 ],
                 type: 'checkbox',
                 default: true,
@@ -593,6 +645,15 @@ export const SETTINGS_CONFIG = {
                 label: 'Profile Customization',
                 description: [
                     'Adds a customization button to your own profile for quickly switching avatar borders.',
+                ],
+                type: 'checkbox',
+                default: true,
+            },
+            profileShowcaseEnabled: {
+                label: 'Profile Showcase',
+                description: [
+                    'Adds a Showcase tab to profiles for featuring a favourite experience and community.',
+                    'Credit to [syra](https://www.roblox.com/users/170038374/profile) for making a concept which this feature is based on.',
                 ],
                 type: 'checkbox',
                 default: true,
@@ -770,7 +831,7 @@ export const SETTINGS_CONFIG = {
                 description:
                     'Shows the experience you played the most with a friend on their profile.',
                 type: 'checkbox',
-                default: true,
+                default: false,
             },
             bulkUnfriendEnabled: {
                 label: 'Bulk Unfriend',
@@ -980,10 +1041,18 @@ export const SETTINGS_CONFIG = {
                     },
                 },
             },
+            improvedAvatarCard: {
+                label: 'Improved Avatar Card',
+                description: [
+                    'Adds a gap around the profile avatar making it look a bit nicer and modern.',
+                ],
+                type: 'checkbox',
+                default: true,
+            },
             usernameColor: {
                 label: 'Username Color Preview',
                 description: [
-                    "Changes the user's display name color on their profile to what color Roblox would give them when talking in game chats. Inspired by https://github.com/RyloRiz/rblx-name-color",
+                    "Changes the user's username color on their profile to what color Roblox would give them when talking in game chats. Inspired by https://github.com/RyloRiz/rblx-name-color",
                 ],
                 type: 'checkbox',
                 default: false,
@@ -1080,6 +1149,15 @@ export const SETTINGS_CONFIG = {
                 ],
                 type: 'checkbox',
                 default: true,
+            },
+            HideAddFriendsButton: {
+                label: 'Hide Add Friends Button',
+                description: [
+                    'Hides the Add Friends button from the Home page and allows friend cards to use the freed space.',
+                ],
+                type: 'checkbox',
+                default: false,
+                contributors: ['476449201'],
             },
             homeLayoutEnabled: {
                 label: 'Home Layout',
@@ -1500,6 +1578,17 @@ export const SETTINGS_CONFIG = {
                 default: true,
                 contributors: ['447170745', '546872490'],
             },
+            FreeRobloxPlusThemesEnabled: {
+                label: 'Free Roblox Plus Themes',
+                description: [
+                    'Allows you to use Roblox Plus Themes on the site without Roblox Plus',
+                    'This also enables the Roblox Plus theme selector early which you can find here https://www.roblox.com/my/account#!/browser-preferences',
+                ],
+                type: 'checkbox',
+                default: false,
+                experimental: 'Can be buggy and may break.',
+                contributors: ['447170745', '4866259395'],
+            },
             currencyTransferEnabled: {
                 label: 'Send Robux',
                 description: [
@@ -1581,16 +1670,148 @@ export const SETTINGS_CONFIG = {
                     'rovalra_sidebar_layout_hidden',
                 ],
             },
+            topbarLayoutEnabled: {
+                label: 'Topbar Layout',
+                description: [
+                    'Lets you reorder and hide buttons in the Roblox topbar.',
+                ],
+                type: 'checkbox',
+                default: false,
+                contributors: ['476449201'],
+                storageKey: [
+                    'rovalra_topbar_layout_order',
+                    'rovalra_topbar_layout_hidden',
+                ],
+            },
+            customRobloxBannerEnabled: {
+                label: 'Roblox Logo Customization',
+                description: [
+                    'Replaces the Roblox banner in the top-left navigation bar with an image loaded from a URL you provide.',
+                    'Also supports GIFs!',
+                    'Recommended image: square PNG or WebP with transparency, 256x256 pixels.',
+                    'You can use this link "https://www.roblox.com/images/roblox_logo.png" to get back the old Roblox Logo!',
+                ],
+                type: 'checkbox',
+                default: false,
+                contributors: ['476449201'],
+                storageKey: [
+                    'customRobloxBannerImageUrl',
+                    'customRobloxBannerImage',
+                    'customRobloxBannerPositionX',
+                    'customRobloxBannerPositionY',
+                    'customRobloxBannerZoom',
+                ],
+                childSettings: {
+                    customRobloxBannerImageUrl: {
+                        label: 'Custom Roblox Banner URL',
+                        description: [
+                            'Enter a direct image URL to use as your Roblox banner.',
+                        ],
+                        type: 'input',
+                        inputType: 'url',
+                        inputWidth: '280px',
+                        placeholder: 'https://example.com/banner.png',
+                        trim: true,
+                        validateHttpUrl: true,
+                        imageUrlPreview: true,
+                        default: null,
+                    },
+                    customRobloxBannerFitMode: {
+                        label: 'Display Mode',
+                        description: [
+                            'Contain keeps the whole image visible.',
+                            'Cover fills the banner area while preserving aspect ratio.',
+                            'Stretch fills the full default Roblox banner area and may distort the image.',
+                        ],
+                        type: 'select',
+                        options: [
+                            { label: 'Contain', value: 'contain' },
+                            { label: 'Cover', value: 'cover' },
+                            { label: 'Stretch', value: 'stretch' },
+                        ],
+                        default: 'contain',
+                    },
+                    customRobloxBannerPositionControls: {
+                        label: 'Image Position',
+                        description: [
+                            'Moves the image inside the banner area. This is most useful in Cover mode.',
+                        ],
+                        type: 'buttonGroup',
+                        buttons: [
+                            {
+                                text: '↑',
+                                event: 'rovalra:customRobloxBannerMoveUp',
+                            },
+                            {
+                                text: '↓',
+                                event: 'rovalra:customRobloxBannerMoveDown',
+                            },
+                            {
+                                text: '←',
+                                event: 'rovalra:customRobloxBannerMoveLeft',
+                            },
+                            {
+                                text: '→',
+                                event: 'rovalra:customRobloxBannerMoveRight',
+                            },
+                            {
+                                text: 'Center',
+                                event: 'rovalra:customRobloxBannerCenter',
+                            },
+                            {
+                                text: 'Zoom In',
+                                event: 'rovalra:customRobloxBannerZoomIn',
+                            },
+                            {
+                                text: 'Zoom Out',
+                                event: 'rovalra:customRobloxBannerZoomOut',
+                            },
+                        ],
+                    },
+                    customRobloxBannerPositionX: {
+                        label: 'Image Position X',
+                        description:
+                            'Horizontal image position from left to right. 50 is centered.',
+                        type: 'number',
+                        min: 0,
+                        max: 100,
+                        step: 1,
+                        default: 50,
+                        hidden: true,
+                    },
+                    customRobloxBannerPositionY: {
+                        label: 'Image Position Y',
+                        description:
+                            'Vertical image position from top to bottom. 50 is centered.',
+                        type: 'number',
+                        min: 0,
+                        max: 100,
+                        step: 1,
+                        default: 50,
+                        hidden: true,
+                    },
+                    customRobloxBannerZoom: {
+                        label: 'Image Zoom',
+                        description:
+                            'Image zoom percentage. 100 is the default size.',
+                        type: 'number',
+                        min: 25,
+                        max: 300,
+                        step: 10,
+                        default: 100,
+                        hidden: true,
+                    },
+                },
+            },
             ageKidsThemeEnabled: {
                 label: 'Age Theme',
                 description: [
                     'Lets you choose which Roblox age theme is used across the site.',
-                    'Overrides **Theme Switcher** setting.',
+                    'Overrides other age-theme settings.',
                 ],
                 type: 'checkbox',
                 default: false,
                 contributors: ['447170745', '650766686'],
-                exclusiveWith: ['ThemeSwitcherEnabled'],
                 childSettings: {
                     ageThemeSelection: {
                         label: 'Theme',
@@ -1646,10 +1867,24 @@ export const SETTINGS_CONFIG = {
                         label: 'Custom Badge Text',
                         description: [
                             'The text you would like to display in the badge.',
+                            'Maximum 30 characters.',
                             'This will be overridden by the Hide The Badge setting',
                         ],
                         type: 'input',
+                        maxLength: 30,
+                        showCharacterCount: true,
                         default: null,
+                        contributors: ['10646979010', '1564574922'],
+                    },
+                    ageKidsTextPushNavbarEnabled: {
+                        label: 'Show Full Badge Text',
+                        description: [
+                            'Expands the badge to show all of your custom text.',
+                            'Moves the navigation links to the right when more room is needed.',
+                        ],
+                        type: 'checkbox',
+                        default: false,
+                        contributors: ['10646979010'],
                     },
                     ageKidsTextHiddenEnabled: {
                         label: 'Hide The Badge',
@@ -1683,15 +1918,6 @@ export const SETTINGS_CONFIG = {
                         storageKey: 'rovalra_previous_beta_programs',
                     },
                 },
-            },
-            removeDownloadButton: {
-                label: 'Remove Download Button',
-                description: [
-                    'Removes the out of place download button from navigation bar.',
-                ],
-                type: 'checkbox',
-                default: false,
-                contributors: ['3602693727'],
             },
             transactionsSidebarLinkEnabled: {
                 label: 'My Transactions sidebar link',
@@ -1771,89 +1997,29 @@ export const SETTINGS_CONFIG = {
     Miscellaneous: {
         title: 'Miscellaneous',
         settings: {
-            ThemeSwitcherEnabled: {
-                label: 'Theme Switcher',
-                description: [
-                    'Allows RoValra to apply themes selected from the theme gallery.',
-                    'Overrides the **Age Theme** setting.',
-                ],
+            CustomThemeBackgroundEnabled: {
+                label: 'Customizable Background Image',
+                description:
+                    'Allows you to add a custom background image to the Roblox website.',
                 type: 'checkbox',
                 default: false,
-                contributors: ['1564574922', '447170745'],
-                beta: 'Can be slightly buggy',
-                keepChildSettingsEnabled: true,
-                exclusiveWith: ['ageKidsThemeEnabled'],
+                contributors: ['476449201'],
                 childSettings: {
-                    openThemeCatalog: {
-                        label: 'Theme Gallery',
+                    customBackgroundImage: {
+                        label: 'Background Image Configuration',
+                        type: 'backgroundImage',
+                        default: DEFAULT_BACKGROUND_IMAGE,
+                        hidden: true,
+                    },
+                    openCustomThemeBackground: {
+                        label: 'Customize Image Settings',
                         description:
-                            'Browse RoValra themes and preview them before applying one.',
+                            "Adjust the image's opacity, blur, position, size, and more.",
                         type: 'button',
-                        buttonText: 'Browse Themes',
-                        event: 'rovalra:openThemesPage',
-                    },
-                    openCustomThemeEditor: {
-                        label: 'Custom Theme Builder',
-                        description: [
-                            'Opens the editor on roblox.com/theme so you can customize the theme against the actual UI.',
-                            'Your custom theme appears in the Yours tab on the theme gallery.',
-                        ],
-                        type: 'button',
-                        buttonText: 'Open Editor',
-                        event: 'rovalra:openCustomThemeEditor',
-                    },
-                    customUserTheme: {
-                        label: 'Custom Theme Colors',
-                        type: 'themeEditor',
-                        default: DEFAULT_CUSTOM_THEME,
-                        hidden: true,
-                    },
-                    customUserThemeSlots: {
-                        label: 'Custom Theme Slots',
-                        type: 'themeSlots',
-                        default: [],
-                        hidden: true,
+                        buttonText: 'Edit',
+                        event: 'rovalra:openCustomThemeBackground',
                     },
                 },
-            },
-            ThemeSwitcher: {
-                label: 'Selected Theme',
-                type: 'select',
-                options: [
-                    { label: 'Default', value: 'default' },
-                    {
-                        label: isAprilFools() ? '"Ow my eyes"' : 'Light',
-                        value: 'builtin-light',
-                    },
-                    {
-                        label: isAprilFools() ? 'Cave' : 'Dark',
-                        value: 'builtin-dark',
-                    },
-                    {
-                        label: isAprilFools()
-                            ? '(RoValra) Headache mode'
-                            : '(RoValra) Nighty',
-                        value: 'custom-nighty',
-                    },
-                    {
-                        label: isAprilFools()
-                            ? '(RoValra) Lemon'
-                            : '(RoValra) Sunset',
-                        value: 'custom-sunset',
-                    },
-                    {
-                        label: isAprilFools()
-                            ? "(RoValra) I'm almost colorblind"
-                            : '(RoValra) High Contrast',
-                        value: 'custom-highcontrast',
-                    },
-                    {
-                        label: 'Custom',
-                        value: 'custom-user',
-                    },
-                ],
-                default: 'default',
-                hidden: true,
             },
 
             ExplorerEnabled: {
@@ -1924,7 +2090,6 @@ export const SETTINGS_CONFIG = {
                 default: false,
                 contributors: ['2615068449'],
             },
-
             copyIdEnabled: {
                 label: 'Allows you to quickly copy an id of a thing you are right clicking.',
                 description:
@@ -1981,6 +2146,13 @@ export const SETTINGS_CONFIG = {
                         type: 'checkbox',
                         default: true,
                         contributors: ['4866259395', '447170745'],
+                    },
+                    profileUsernameSpacingFixEnabled: {
+                        label: 'Keep profile usernames spaced from the top',
+                        description:
+                            'Prevents your username from being moved up to a place where its harder to read. From extensions adding features.',
+                        type: 'checkbox',
+                        default: true,
                     },
                 },
             },
@@ -2384,10 +2556,27 @@ export const SETTINGS_CONFIG = {
                 type: 'checkbox',
                 default: false,
             },
+            forceGuidelinesPopup: {
+                label: 'Force Guidelines Popup',
+                description: [
+                    'Shows the RoValra Guidelines every time you try to use a feature that requires them, even after you previously agreed.',
+                ],
+                type: 'checkbox',
+                default: false,
+                contributors: ['10646979010'],
+            },
             alwaysShowAccountStandingTab: {
                 label: ['Always show Account Standing tab'],
                 description: [
                     'This will make the Account Standing tab show even when your account has no current or previous RoValra moderation action.',
+                ],
+                type: 'checkbox',
+                default: false,
+            },
+            profileTestTabEnabled: {
+                label: ['Profile test tab'],
+                description: [
+                    'Adds a test tab containing the text "test" to profiles.',
                 ],
                 type: 'checkbox',
                 default: false,

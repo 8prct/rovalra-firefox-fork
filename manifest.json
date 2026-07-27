@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "RoValra - Roblox Improved (Firefox)",
-    "version": "2.5.10.1",
+    "version": "2.6.2",
     "author": "8prct (Firefox/Zen port); NotValra (original RoValra)",
     "homepage_url": "https://github.com/8prct/rovalra-firefox-fork",
     "description": "Unofficial Firefox and Zen Browser port of RoValra, maintained by 8prct.",
@@ -32,6 +32,7 @@
         "scripts": ["background.js"],
         "type": "module"
     },
+
     "optional_permissions": ["webNavigation", "webRequest"],
     "declarative_net_request": {
         "rule_resources": [
@@ -65,6 +66,7 @@
     ],
     "action": {
         "default_popup": "public/Assets/popup/popup.html",
+
         "default_icon": {
             "16": "public/Assets/icon-16.png",
             "48": "public/Assets/icon-48.png",
