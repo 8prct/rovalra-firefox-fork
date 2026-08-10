@@ -2,7 +2,7 @@ import { getRegionData } from '../../regions.js';
 import { SETTINGS_CONFIG } from '../settingConfig.js';
 import { generateSettingsUI } from '../generateSettings.js';
 import { initSettings, syncDonatorTier } from '../handlesettings.js';
-import { buildSettingsPage } from './settingui.js';
+import { buildSettingsPage, getSettingsTabKey } from './settingui.js';
 import {
     updateContent,
     handleSearch,
@@ -28,7 +28,7 @@ function findStaticSettingsTab(hashKey) {
         if (!STATIC_SETTINGS_TAB_IDS.has(button.id)) return false;
         return (
             button.id.toLowerCase() === lowerHashKey ||
-            button.text.toLowerCase() === lowerHashKey
+            getSettingsTabKey(button) === lowerHashKey
         );
     });
 }
@@ -178,7 +178,7 @@ export async function checkRoValraPage() {
                 'Falling back to info page.',
             );
             const infoButtonData = buttonData.find(
-                (b) => b.text.toLowerCase() === 'info',
+                (button) => button.id === 'info',
             );
             if (infoButtonData) {
                 await updateContent(infoButtonData, contentContainer);

@@ -10,7 +10,10 @@ const settingDeprecations: Record<string, ((value: any, gets: (key: string) => P
 import { SETTINGS_CONFIG } from "../content/core/settings/settingConfig.js";
 import { debugVerbose, flush } from "../content/core/debug.js";
 
-let compatResults: { replaced: string[]; deleted: string[] } | null = null;
+let compatResults: { replaced: string[]; deleted: string[] } = {
+    replaced: [],
+    deleted: [],
+};
 
 const getStoredSettingValue: (s: string) => Promise<any | undefined> = async (setting: string) => {
     const individual = await chrome.storage.local.get({
@@ -127,12 +130,12 @@ const init = (async () => {
 });
 
 chrome.runtime.onMessage.addListener((message: any, sender: unknown, sendResponse: (...args: any[]) => void) => {
-    if (message.type === "settingsCompatGetRes") {
-        debugVerbose("Recieved signal settingsCompatGetRes.", {message: message, data: compatResults});
-        sendResponse(compatResults);
-        compatResults = {replaced: [], deleted: []};
-    }
-    return true;
+    if (message.type !== "settingsCompatGetRes") return false;
+
+    debugVerbose("Recieved signal settingsCompatGetRes.", {message: message, data: compatResults});
+    sendResponse(compatResults);
+    compatResults = {replaced: [], deleted: []};
+    return false;
 });
 
 export default init;

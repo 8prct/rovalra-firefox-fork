@@ -208,7 +208,11 @@ function removeRequestHeader(headers, name) {
     if (headers instanceof Headers) {
         const nextHeaders = new Headers(headers);
         nextHeaders.delete(name);
-        return Object.fromEntries(nextHeaders.entries());
+        const result = {};
+        nextHeaders.forEach((value, key) => {
+            result[key] = value;
+        });
+        return result;
     }
 
     if (Array.isArray(headers)) {

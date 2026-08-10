@@ -12,3 +12,22 @@ export function injectFirefoxPageScripts() {
     script.addEventListener('load', () => script.remove(), { once: true });
     (document.head || document.documentElement).appendChild(script);
 }
+
+/**
+ * Dispatches data to a script running in the page's main world.
+ * Firefox blocks page scripts from reading objects created in an extension's
+ * isolated world unless the value is explicitly cloned into the page.
+ */
+export function dispatchPageEvent(name, detail) {
+    const cloneIntoPage = globalThis.cloneInto;
+    const pageDetail =
+        typeof cloneIntoPage === 'function'
+            ? cloneIntoPage(detail, window)
+            : detail;
+
+    document.dispatchEvent(
+        new CustomEvent(name, {
+            detail: pageDetail,
+        }),
+    );
+}

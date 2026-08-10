@@ -583,7 +583,9 @@ async function initializePage() {
 
     const scheduleSettingsMaintenance = () => {
         if (typeof requestIdleCallback === 'function') {
-            requestIdleCallback(runSettingsMaintenance, { timeout: 5000 });
+            window.requestIdleCallback(runSettingsMaintenance, {
+                timeout: 5000,
+            });
             return;
         }
 

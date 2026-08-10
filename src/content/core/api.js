@@ -9,12 +9,19 @@ import { showSystemAlert } from './ui/roblox/alert.js';
 
 import { updateUserLocationIfChanged } from './utils/location.js';
 const activeRequests = new Map();
+
+function headersToObject(headers) {
+    const result = {};
+    headers.forEach((value, key) => {
+        result[key] = value;
+    });
+    return result;
+}
 const responseCache = new Map();
 const USER_BADGES_CACHE_TTL_MS = 5 * 60 * 1000;
 let gameJoinErrorCount = 0;
 let lastGameJoinRequestTime = 0;
 const GAMEJOIN_TIMEOUT_MS = 2000;
-const GAMEJOIN_V2_FLAG_URL = 'https://apis.rovalra.com/v1/gamejoin-v2/';
 const TEMPORARILY_LIMITED_MESSAGE =
     'Your account has been temporarily limited for violating terms of service.';
 
@@ -128,18 +135,15 @@ function parseGameJoinV2Flag(data) {
 
 async function fetchGameJoinV2Flag() {
     try {
-        const response = await fetch(
-            `${GAMEJOIN_V2_FLAG_URL}?_RoValraRequest`,
-            {
-                method: 'GET',
-                credentials: 'omit',
-                cache: 'no-store',
-                headers: {
-                    Accept: 'application/json',
-                    'x-rovalra-user-agent': getRovalraUserAgent(),
-                },
-            },
-        );
+        const response = await callRobloxApi({
+            isRovalraApi: true,
+            subdomain: 'apis',
+            endpoint: '/v1/gamejoin-v2/',
+            method: 'GET',
+            credentials: 'omit',
+            skipAutoAuth: true,
+            noCache: true,
+        });
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -488,46 +492,14 @@ export async function callRobloxApi(options) {
             }
         }
 
-        if (useBackground) {
-            return new Promise((resolve) => {
-                chrome.runtime.sendMessage(
-                    {
-                        action: 'fetchRobloxApi',
-                        options: {
-                            endpoint,
-                            subdomain,
-                            fullUrl: customFullUrl,
-                            method,
-                            body,
-                            headers: Object.fromEntries(
-                                normalizedHeaders.entries(),
-                            ),
-                            noCache,
-                            responseType,
-                        },
-                    },
-                    (response) => {
-                        if (chrome.runtime.lastError || !response) {
-                            resolve(Response.error());
-                            return;
-                        }
-                        if (useApiKey && response.status === 401) {
-                            invalidateApiKey();
-                        }
-                        const { body, ...init } = response;
-                        resolve(new Response(body, init));
-                    },
-                );
-            });
+        if (isRovalraApi && subdomain === 'apis' && !skipAutoAuth) {
+            const token = await getValidAccessToken();
+            if (token) {
+                normalizedHeaders.set('Authorization', `Bearer ${token}`);
+            }
         }
 
-        if (isRovalraApi && subdomain === 'apis') {
-            if (!skipAutoAuth) {
-                const token = await getValidAccessToken();
-                if (token) {
-                    normalizedHeaders.set('Authorization', `Bearer ${token}`);
-                }
-            }
+        if (isRovalraApi) {
             const isDowntimeSimulated = await checkSimulatedDowntime();
             if (isDowntimeSimulated) {
                 console.warn(
@@ -557,6 +529,41 @@ export async function callRobloxApi(options) {
                 );
                 await new Promise((resolve) => setTimeout(resolve, 5000));
             }
+        }
+
+        if (useBackground || isRovalraApi) {
+            return new Promise((resolve) => {
+                chrome.runtime.sendMessage(
+                    {
+                        action: 'fetchRobloxApi',
+                        options: {
+                            endpoint,
+                            subdomain,
+                            fullUrl: customFullUrl,
+                            method,
+                            body,
+                            headers: headersToObject(normalizedHeaders),
+                            isRovalraApi,
+                            credentials:
+                                options.credentials ??
+                                (isRovalraApi ? 'omit' : 'include'),
+                            noCache,
+                            responseType,
+                        },
+                    },
+                    (response) => {
+                        if (chrome.runtime.lastError || !response) {
+                            resolve(Response.error());
+                            return;
+                        }
+                        if (useApiKey && response.status === 401) {
+                            invalidateApiKey();
+                        }
+                        const { body, ...init } = response;
+                        resolve(new Response(body, init));
+                    },
+                );
+            });
         }
 
         if (subdomain === 'gamejoin') {

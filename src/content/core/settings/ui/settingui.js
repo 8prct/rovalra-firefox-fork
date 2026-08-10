@@ -11,6 +11,32 @@ const ACCOUNT_STANDING_TAB_IDS = new Set([
     'changelogs',
 ]);
 
+const SETTINGS_TAB_FALLBACK_LABELS = {
+    info: 'Info',
+    credits: 'Contributors',
+    donatorPerks: 'Donator Perks',
+    store: 'Store',
+    changelogs: 'Changelogs',
+    accountStanding: 'Account Standing',
+    settings: 'Settings',
+};
+
+export function getSettingsTabLabel(item) {
+    const translatedLabel = item?.text;
+    if (
+        typeof translatedLabel === 'string' &&
+        translatedLabel.trim().length > 0
+    ) {
+        return translatedLabel;
+    }
+
+    return SETTINGS_TAB_FALLBACK_LABELS[item?.id] || item?.id || 'Info';
+}
+
+export function getSettingsTabKey(item) {
+    return getSettingsTabLabel(item).toLowerCase();
+}
+
 function isAccountStandingDirectLink() {
     const rovalraTab = new URLSearchParams(window.location.search).get(
         'rovalra',
@@ -190,9 +216,10 @@ export async function buildSettingsPage({
                 shouldShowStaticTab(item, accountStandingTabVisible),
             )
             .forEach((item) => {
+                const label = getSettingsTabLabel(item);
                 dropdownItems.push({
-                    value: item.text.toLowerCase(),
-                    label: item.text,
+                    value: label.toLowerCase(),
+                    label,
                 });
             });
 
@@ -461,24 +488,26 @@ function createUnifiedMenu({
         shouldShowStaticTab(item, accountStandingTabVisible),
     );
     staticItems.forEach((item) => {
+        const label = getSettingsTabLabel(item);
+        const tabKey = getSettingsTabKey(item);
         const listItem = document.createElement('li');
-        listItem.id = `${item.text.toLowerCase()}-tab`;
-        listItem.dataset.text = item.text;
+        listItem.id = `${tabKey}-tab`;
+        listItem.dataset.text = label;
         listItem.dataset.staticId = item.id;
         listItem.className = 'menu-option';
         listItem.setAttribute('role', 'tab');
         const link = document.createElement('a');
         link.className = 'menu-option-content';
-        link.href = `#!/${item.text.toLowerCase()}`;
+        link.href = `#!/${tabKey}`;
         const span = document.createElement('span');
         span.className = 'font-caption-header';
-        span.textContent = item.text;
+        span.textContent = label;
         link.appendChild(span);
         listItem.appendChild(link);
         menuList.appendChild(listItem);
         link.addEventListener('click', async (e) => {
             e.preventDefault();
-            const newHashKey = item.text.toLowerCase();
+            const newHashKey = tabKey;
             const newUrl = new URL(window.location.href);
             if (newUrl.searchParams.get('rovalra') !== newHashKey) {
                 newUrl.searchParams.set('rovalra', newHashKey);
@@ -490,7 +519,7 @@ function createUnifiedMenu({
             const dropdownTrigger = document.querySelector(
                 '#rovalra-mobile-menu-container .rovalra-dropdown-trigger span',
             );
-            if (dropdownTrigger) dropdownTrigger.textContent = item.text;
+            if (dropdownTrigger) dropdownTrigger.textContent = label;
         });
     });
 
@@ -520,26 +549,28 @@ function createUnifiedMenu({
 }
 
 function addStaticTabItem(item, menuList, loadTabContent) {
+    const label = getSettingsTabLabel(item);
+    const tabKey = getSettingsTabKey(item);
     const listItem = document.createElement('li');
-    listItem.id = `${item.text.toLowerCase()}-tab`;
-    listItem.dataset.text = item.text;
+    listItem.id = `${tabKey}-tab`;
+    listItem.dataset.text = label;
     listItem.dataset.staticId = item.id;
     listItem.className = 'menu-option';
     listItem.setAttribute('role', 'tab');
 
     const link = document.createElement('a');
     link.className = 'menu-option-content';
-    link.href = `#!/${item.text.toLowerCase()}`;
+    link.href = `#!/${tabKey}`;
 
     const span = document.createElement('span');
     span.className = 'font-caption-header';
-    span.textContent = item.text;
+    span.textContent = label;
     link.appendChild(span);
     listItem.appendChild(link);
 
     link.addEventListener('click', async (e) => {
         e.preventDefault();
-        const newHashKey = item.text.toLowerCase();
+        const newHashKey = tabKey;
         const newUrl = new URL(window.location.href);
         if (newUrl.searchParams.get('rovalra') !== newHashKey) {
             newUrl.searchParams.set('rovalra', newHashKey);
@@ -551,7 +582,7 @@ function addStaticTabItem(item, menuList, loadTabContent) {
         const dropdownTrigger = document.querySelector(
             '#rovalra-mobile-menu-container .rovalra-dropdown-trigger span',
         );
-        if (dropdownTrigger) dropdownTrigger.textContent = item.text;
+        if (dropdownTrigger) dropdownTrigger.textContent = label;
     });
 
     const separator = menuList.querySelector('.menu-separator');

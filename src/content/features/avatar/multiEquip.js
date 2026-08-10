@@ -1,29 +1,35 @@
-import { getIdsByCategory, getIdsBySubcategory } from '../../core/utils/itemCategories.js';
+import {
+    getIdsByCategory,
+    getIdsBySubcategory,
+} from '../../core/utils/itemCategories.js';
+import { dispatchPageEvent } from '../../core/firefox/compat.js';
 
 export function init() {
     const updateState = async (enabled) => {
-        document.dispatchEvent(new CustomEvent('rovalra-multi-equip', { detail: { enabled } }));
+        dispatchPageEvent('rovalra-multi-equip', { enabled });
 
         if (enabled) {
             try {
                 const [accData, clothingData, hairData] = await Promise.all([
                     getIdsByCategory('Accessories'),
                     getIdsByCategory('Clothing'),
-                    getIdsBySubcategory('HairAccessories')
+                    getIdsBySubcategory('HairAccessories'),
                 ]);
 
                 const accIds = new Set(accData?.assetTypeIds || []);
-                if (hairData?.assetTypeIds) hairData.assetTypeIds.forEach(id => accIds.add(id));
+                if (hairData?.assetTypeIds)
+                    hairData.assetTypeIds.forEach((id) => accIds.add(id));
 
-                document.dispatchEvent(new CustomEvent('rovalra-multi-equip', {
-                    detail: {
-                        enabled,
-                        accessories: Array.from(accIds),
-                        layered: clothingData?.assetTypeIds || []
-                    }
-                }));
+                dispatchPageEvent('rovalra-multi-equip', {
+                    enabled,
+                    accessories: Array.from(accIds),
+                    layered: clothingData?.assetTypeIds || [],
+                });
             } catch (e) {
-                console.warn("RoValra: Failed to fetch dynamic categories for multi-equip", e);
+                console.warn(
+                    'RoValra: Failed to fetch dynamic categories for multi-equip',
+                    e,
+                );
             }
         }
     };

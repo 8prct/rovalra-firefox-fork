@@ -13,6 +13,7 @@ import { hasOwn } from '../utils.js';
 import { showConfirmationPrompt } from '../ui/confirmationPrompt.js';
 import { showSystemAlert } from '../ui/roblox/alert.js';
 import { requestTouAgreement } from '../ui/tou/touAgreement.js';
+import { dispatchPageEvent } from '../firefox/compat.js';
 import {
     normalizeProfilePronouns,
     replacePronounSpecialCharacters,
@@ -453,9 +454,7 @@ export const loadSettings = async () => {
                         }
                     }
 
-                    for (const [key, value] of Object.entries(
-                        forcedSettings,
-                    )) {
+                    for (const [key, value] of Object.entries(forcedSettings)) {
                         settings[key] = value;
                     }
                     resolve(settings);
@@ -917,14 +916,10 @@ export const handleSaveSettings = async (settingName, value) => {
                             );
                     }
 
-                    document.dispatchEvent(
-                        new CustomEvent('rovalra:settingSaved', {
-                            detail: {
-                                name: settingName,
-                                value: sanitizedValue,
-                            },
-                        }),
-                    );
+                    dispatchPageEvent('rovalra:settingSaved', {
+                        name: settingName,
+                        value: sanitizedValue,
+                    });
 
                     if (profilePronounsChanged || profilePronounsSyncFailed) {
                         showSystemAlert(

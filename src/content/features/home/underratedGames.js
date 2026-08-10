@@ -7,6 +7,7 @@ import {
 import { t } from '../../core/locale/i18n.js';
 import { observeElement } from '../../core/observer.js';
 import { settings } from '../../core/settings/getSettings.js';
+import { dispatchPageEvent } from '../../core/firefox/compat.js';
 import { createInteractiveTimestamp } from '../../core/ui/time/time.js';
 import {
     isAuthenticatedUser13PlusAndAgeChecked,
@@ -304,11 +305,7 @@ function enhanceUnderratedGameTile(link) {
 }
 
 function publishUnderratedGamesSort(sort) {
-    document.dispatchEvent(
-        new CustomEvent('rovalra-home-extra-sorts', {
-            detail: { sorts: [sort] },
-        }),
-    );
+    dispatchPageEvent('rovalra-home-extra-sorts', { sorts: [sort] });
 }
 
 function replaceRotationMarker(root) {

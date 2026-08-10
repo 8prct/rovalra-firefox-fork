@@ -3,6 +3,7 @@ import { getAssets } from '../../core/assets.js';
 import { t } from '../../core/locale/i18n.js';
 import { settings } from '../../core/settings/getSettings.js';
 import { callRobloxApi } from '../../core/api.js';
+import { dispatchPageEvent } from '../../core/firefox/compat.js';
 import {
     get as getCache,
     set as setCache,
@@ -205,11 +206,10 @@ function setEnabled(value) {
 }
 
 function publishInitialSettingState(enabled) {
-    document.dispatchEvent(
-        new CustomEvent('rovalra:settingSaved', {
-            detail: { name: SETTING_NAME, value: enabled === true },
-        }),
-    );
+    dispatchPageEvent('rovalra:settingSaved', {
+        name: SETTING_NAME,
+        value: enabled === true,
+    });
 }
 
 export function init() {

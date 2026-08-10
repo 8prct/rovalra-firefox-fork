@@ -1,4 +1,5 @@
 import { observeElement } from '../../core/observer.js';
+import { dispatchPageEvent } from '../../core/firefox/compat.js';
 
 export function init() {
     let isHideRobuxEnabled = false;
@@ -87,15 +88,11 @@ export function init() {
 
                 updateSettingsPage();
 
-                document.dispatchEvent(
-                    new CustomEvent('rovalra-streamer-mode', {
-                        detail: {
-                            enabled: data.streamermode,
-                            settingsPageInfo: data.settingsPageInfo !== false,
-                            hideRobux: data.hideRobux === true,
-                        },
-                    }),
-                );
+                dispatchPageEvent('rovalra-streamer-mode', {
+                    enabled: data.streamermode,
+                    settingsPageInfo: data.settingsPageInfo !== false,
+                    hideRobux: data.hideRobux === true,
+                });
             },
         );
     }

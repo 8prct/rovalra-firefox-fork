@@ -1,5 +1,6 @@
 import { callRobloxApiJson } from '../../core/api.js';
 import { createGameCard } from '../../core/ui/games/gameCard.js';
+import { dispatchPageEvent } from '../../core/firefox/compat.js';
 
 const ACCURATE_CONTINUE_SETTING = 'AccurateContinueEnabled';
 const AUTO_REFRESH_SETTING = 'accurateContinueAutoRefreshEnabled';
@@ -374,14 +375,10 @@ function publishAccurateContinue(games, enabled = accurateContinueEnabled) {
         );
     } catch {}
 
-    document.dispatchEvent(
-        new CustomEvent('rovalra-accurate-continue', {
-            detail: {
-                enabled,
-                games: enabled && Array.isArray(games) ? games : [],
-            },
-        }),
-    );
+    dispatchPageEvent('rovalra-accurate-continue', {
+        enabled,
+        games: enabled && Array.isArray(games) ? games : [],
+    });
 }
 
 async function fetchRecentlyVisitedGames() {

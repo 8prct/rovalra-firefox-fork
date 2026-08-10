@@ -3737,10 +3737,17 @@ async function initializeExtension() {
 }
 
 export function init() {
+    const handleInitializationError = (error) => {
+        document.body?.classList.remove('rovalra-settings-loading');
+        console.error('RoValra: Settings initialization failed.', error);
+    };
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeExtension);
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeExtension().catch(handleInitializationError);
+        });
     } else {
-        initializeExtension();
+        initializeExtension().catch(handleInitializationError);
     }
 }
 
@@ -3749,7 +3756,7 @@ window.addEventListener('beforeunload', () => {
 });
 
 function initializeHeartbeatSpoofer() {
-    const originalFetch = window.fetch;
+    const originalFetch = window.fetch.bind(window);
     let pulseInterval = null;
     let spoofingMode = 'off';
 

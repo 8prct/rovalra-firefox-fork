@@ -354,9 +354,9 @@ const contextMenuClickListener = async (info, tab) => {
             chrome.tabs.sendMessage(tab.id, {
                 action: 'view-ids',
                 data: {
-                    targetId: id
-                }
-            })
+                    targetId: id,
+                },
+            });
         }
     } else if (info.menuItemId.startsWith('rovalra-copy-') && tab?.id) {
         const textToCopy = info.menuItemId.replace('rovalra-copy-', '');
@@ -408,15 +408,33 @@ async function callRobloxApiBackground(options) {
         body = null,
         headers = {},
         fullUrl = null,
+        isRovalraApi = false,
+        credentials = isRovalraApi ? 'omit' : 'include',
+        noCache = false,
     } = options;
 
     let url;
     if (fullUrl) {
         const parsedUrl = new URL(fullUrl);
-        if (parsedUrl.hostname !== 'setup.rbxcdn.com') {
+        const allowedFullUrlHosts = new Set([
+            'setup.rbxcdn.com',
+            'apis.rovalra.com',
+            'catalog.rovalra.com',
+            'www.rovalra.com',
+        ]);
+        if (
+            parsedUrl.protocol !== 'https:' ||
+            !allowedFullUrlHosts.has(parsedUrl.hostname)
+        ) {
             throw new Error('Unsupported fullUrl host for background fetch');
         }
         url = parsedUrl.toString();
+    } else if (isRovalraApi) {
+        const allowedRovalraSubdomains = new Set(['apis', 'catalog', 'www']);
+        if (!allowedRovalraSubdomains.has(subdomain)) {
+            throw new Error('Unsupported RoValra API subdomain');
+        }
+        url = `https://${subdomain}.rovalra.com${endpoint}`;
     } else {
         url = `https://${subdomain}.roblox.com${endpoint}`;
     }
@@ -424,10 +442,15 @@ async function callRobloxApiBackground(options) {
     const separator = url.includes('?') ? '&' : '?';
 
     if (!endpoint?.includes('/player-hydration-service/v1/players/signed')) {
-        url += `${separator}_RoValraRequest=`;
+        url += `${separator}_RoValraRequest=${noCache ? Date.now() : ''}`;
     }
 
-    const fetchOptions = { method, headers: { ...headers } };
+    const fetchOptions = {
+        method,
+        headers: { ...headers },
+        credentials,
+        cache: noCache ? 'no-store' : 'default',
+    };
 
     if (body) {
         if (typeof body === 'object') {
@@ -2172,9 +2195,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return true;
 
         case 'requestPermission': {
-            const permissions = normalizePermissions(
-                request.permission,
-            ).filter((permission) => permission !== 'menus');
+            const permissions = normalizePermissions(request.permission).filter(
+                (permission) => permission !== 'menus',
+            );
             if (permissions.length === 0) {
                 sendResponse({ granted: true });
                 return false;
@@ -2397,7 +2420,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                                 ) {
                                     request.ids.forEach((item) => {
                                         if (item.type === 'Universe') {
-                                            if (settings.copyUniverseIdEnabled) {
+                                            if (
+                                                settings.copyUniverseIdEnabled
+                                            ) {
                                                 menusApi.create({
                                                     id: `rovalra-copy-universe-${item.id}`,
                                                     title: item.title,
@@ -2439,8 +2464,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                                         ],
                                     });
                                 }
-                        });
-                    })
+                            },
+                        );
+                    });
                 }
             }
             return false;

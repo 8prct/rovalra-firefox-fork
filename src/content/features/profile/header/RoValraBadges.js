@@ -6,6 +6,7 @@ import { callRobloxApiJson } from '../../../core/api.js';
 import { createSquareButton } from '../../../core/ui/profile/header/squarebutton.js';
 import { getUserIdFromUrl } from '../../../core/idExtractor.js';
 import { settings } from '../../../core/settings/getSettings.js';
+import { dispatchPageEvent } from '../../../core/firefox/compat.js';
 const badgeCache = new Map();
 const groupRuntimeBadgeCache = new Map();
 const VIDEO_STAR_GROUP_ID = 4199740;
@@ -245,10 +246,9 @@ function createHeaderBadge(parentContainer, badge) {
             left: '-100%',
             width: badge.grayGlimmer ? '70%' : '50%',
             height: '100%',
-            background:
-                badge.grayGlimmer
-                    ? 'linear-gradient(to right, transparent, rgba(70, 70, 70, 0.8), rgba(145, 145, 145, 0.75), transparent)'
-                    : 'linear-gradient(to right, transparent, rgba(255,255,255,0.8), transparent)',
+            background: badge.grayGlimmer
+                ? 'linear-gradient(to right, transparent, rgba(70, 70, 70, 0.8), rgba(145, 145, 145, 0.75), transparent)'
+                : 'linear-gradient(to right, transparent, rgba(255,255,255,0.8), transparent)',
             mixBlendMode: badge.grayGlimmer ? 'multiply' : '',
             transform: 'skewX(-25deg)',
             animation: badge.grayGlimmer
@@ -363,10 +363,14 @@ async function addHeaderBadges(container) {
         if ((await settings.videoStarBadgeEnabled) === false) {
             disabledRuntimeBadges.add(VIDEO_STAR_BADGE_NAME);
         }
-        const mergedApiBadges = mergeRuntimeBadges(currentUserId, data.apiBadges, {
-            robloxGroupFeaturesEnabled,
-            disabledRuntimeBadges,
-        });
+        const mergedApiBadges = mergeRuntimeBadges(
+            currentUserId,
+            data.apiBadges,
+            {
+                robloxGroupFeaturesEnabled,
+                disabledRuntimeBadges,
+            },
+        );
 
         container
             .querySelectorAll('.rovalra-header-badge, .rovalra-text-badge')
@@ -467,11 +471,9 @@ async function addProfileBadgeButtons(buttonContainer) {
 
 export function init() {
     settings.robloxGroupFeaturesEnabled.then((enabled) => {
-        document.dispatchEvent(
-            new CustomEvent('rovalra:settingsState', {
-                detail: { robloxGroupFeaturesEnabled: enabled !== false },
-            }),
-        );
+        dispatchPageEvent('rovalra:settingsState', {
+            robloxGroupFeaturesEnabled: enabled !== false,
+        });
     });
 
     if (!groupRolesListenerInitialized) {

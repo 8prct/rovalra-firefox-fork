@@ -1,7 +1,7 @@
 ## RoValra Firefox / Zen port by 8prct
 
 Unofficial Firefox and [Zen Browser](https://zen-browser.app/) port of
-**RoValra 2.6.4.1**, maintained by [8prct](https://github.com/8prct).
+**RoValra 2.6.4.2**, maintained by [8prct](https://github.com/8prct).
 Original RoValra: [NotValra/RoValra](https://github.com/NotValra/RoValra).
 
 Build locally:

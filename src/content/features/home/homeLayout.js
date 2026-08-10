@@ -5,6 +5,7 @@ import { settings } from '../../core/settings/getSettings.js';
 import { handleSaveSettings } from '../../core/settings/handlesettings.js';
 import { createButton } from '../../core/ui/buttons.js';
 import { createOverlay } from '../../core/ui/overlay.js';
+import { dispatchPageEvent } from '../../core/firefox/compat.js';
 
 const ORDER_STORAGE_KEY = 'rovalra_home_layout_order';
 const CATEGORIES_STORAGE_KEY = 'rovalra_home_layout_categories';
@@ -79,14 +80,10 @@ function publishHomeLayoutState(
         );
     } catch {}
 
-    document.dispatchEvent(
-        new CustomEvent('rovalra-home-layout', {
-            detail: {
-                order: normalizedOrder,
-                hidden: normalizedHiddenKeys,
-            },
-        }),
-    );
+    dispatchPageEvent('rovalra-home-layout', {
+        order: normalizedOrder,
+        hidden: normalizedHiddenKeys,
+    });
 }
 
 async function loadLocale() {
