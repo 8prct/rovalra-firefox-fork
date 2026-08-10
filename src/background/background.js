@@ -348,6 +348,16 @@ const contextMenuClickListener = async (info, tab) => {
                 text: String(universeId),
             });
         }
+    } else if (info.menuItemId.startsWith('rovalra-viewid-')) {
+        const id = info.menuItemId.replace('rovalra-viewid-', '');
+        if (id && tab?.id) {
+            chrome.tabs.sendMessage(tab.id, {
+                action: 'view-ids',
+                data: {
+                    targetId: id
+                }
+            })
+        }
     } else if (info.menuItemId.startsWith('rovalra-copy-') && tab?.id) {
         const textToCopy = info.menuItemId.replace('rovalra-copy-', '');
         chrome.tabs.sendMessage(tab.id, {
@@ -2162,10 +2172,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return true;
 
         case 'requestPermission': {
-            const requestedPermissions = normalizePermissions(
+            const permissions = normalizePermissions(
                 request.permission,
             ).filter((permission) => permission !== 'menus');
-            if (requestedPermissions.length === 0) {
+            if (permissions.length === 0) {
                 sendResponse({ granted: true });
                 return false;
             }
@@ -2173,47 +2183,59 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             const requestId = `permission_${Date.now()}_${Math.random().toString(36).slice(2)}`;
             const url = chrome.runtime.getURL(
                 `public/Assets/permission_request.html?permissions=${encodeURIComponent(
-                    JSON.stringify(requestedPermissions),
+                    JSON.stringify(permissions),
                 )}&requestId=${encodeURIComponent(requestId)}`,
             );
 
-            const result = new Promise((resolve) => {
-                const listener = (message) => {
-                    if (
-                        message.action === 'permissionRequestResult' &&
-                        message.requestId === requestId
-                    ) {
-                        chrome.runtime.onMessage.removeListener(listener);
-                        resolve(!!message.granted);
-                    }
-                };
-                chrome.runtime.onMessage.addListener(listener);
-                setTimeout(() => {
-                    chrome.runtime.onMessage.removeListener(listener);
-                    resolve(false);
-                }, 300000);
-            });
+            let timeoutId;
+            let settled = false;
+            const finish = (granted) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeoutId);
+                chrome.runtime.onMessage.removeListener(listener);
+                sendResponse({ granted: !!granted });
+            };
+            const listener = (message) => {
+                if (
+                    message.action === 'permissionRequestResult' &&
+                    message.requestId === requestId
+                ) {
+                    finish(message.granted);
+                }
+            };
 
-            chrome.windows.create({
-                url,
-                type: 'popup',
-                width: 480,
-                height: 340,
-            });
-            result.then((granted) => sendResponse({ granted }));
+            chrome.runtime.onMessage.addListener(listener);
+            timeoutId = setTimeout(() => finish(false), 300000);
+            chrome.windows.create(
+                {
+                    url,
+                    type: 'popup',
+                    width: 480,
+                    height: 340,
+                },
+                () => {
+                    if (chrome.runtime.lastError) finish(false);
+                },
+            );
             return true;
         }
 
-        case 'revokePermission': {
-            const permissions = normalizePermissions(request.permission).filter(
-                (permission) => permission !== 'menus',
-            );
-            if (permissions.length === 0) {
+        case 'revokePermission':
+            if (
+                normalizePermissions(request.permission).every(
+                    (permission) => permission === 'menus',
+                )
+            ) {
                 sendResponse({ revoked: false });
                 return false;
             }
             chrome.permissions.remove(
-                { permissions },
+                {
+                    permissions: normalizePermissions(
+                        request.permission,
+                    ).filter((permission) => permission !== 'menus'),
+                },
                 (removed) => {
                     if (chrome.runtime.lastError) {
                         sendResponse({
@@ -2226,7 +2248,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 },
             );
             return true;
-        }
 
         case 'updateUserId':
             if (request.userId && request.userId !== state.currentUserId) {
@@ -2365,43 +2386,62 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         case 'updateContextMenu':
             if (menusApi) {
-                chrome.storage.local.get(
-                    ['copyIdEnabled', 'copyUniverseIdEnabled'],
-                    (settings) => {
-                        menusApi.removeAll(() => {
-                            if (
-                                !chrome.runtime.lastError &&
-                                request.ids?.length > 0
-                            ) {
-                                request.ids.forEach((item) => {
-                                    if (item.type === 'Universe') {
-                                        if (settings.copyUniverseIdEnabled) {
-                                            menusApi.create({
-                                                id: `rovalra-copy-universe-${item.id}`,
-                                                title: item.title,
-                                                contexts: ['link'],
-                                                documentUrlPatterns: [
-                                                    '*://*.roblox.com/*',
-                                                ],
-                                            });
+                if (request.feature === 'copyid') {
+                    chrome.storage.local.get(
+                        ['copyIdEnabled', 'copyUniverseIdEnabled'],
+                        (settings) => {
+                            menusApi.removeAll(() => {
+                                if (
+                                    !chrome.runtime.lastError &&
+                                    request.ids?.length > 0
+                                ) {
+                                    request.ids.forEach((item) => {
+                                        if (item.type === 'Universe') {
+                                            if (settings.copyUniverseIdEnabled) {
+                                                menusApi.create({
+                                                    id: `rovalra-copy-universe-${item.id}`,
+                                                    title: item.title,
+                                                    contexts: ['link'],
+                                                    documentUrlPatterns: [
+                                                        '*://*.roblox.com/*',
+                                                    ],
+                                                });
+                                            }
+                                        } else {
+                                            if (settings.copyIdEnabled) {
+                                                menusApi.create({
+                                                    id: `rovalra-copy-${item.id}`,
+                                                    title: item.title,
+                                                    contexts: ['link'],
+                                                    documentUrlPatterns: [
+                                                        '*://*.roblox.com/*',
+                                                    ],
+                                                });
+                                            }
                                         }
-                                    } else {
-                                        if (settings.copyIdEnabled) {
-                                            menusApi.create({
-                                                id: `rovalra-copy-${item.id}`,
-                                                title: item.title,
-                                                contexts: ['link'],
-                                                documentUrlPatterns: [
-                                                    '*://*.roblox.com/*',
-                                                ],
-                                            });
-                                        }
-                                    }
-                                });
-                            }
+                                    });
+                                }
+                            });
+                        },
+                    );
+                } else if (request.feature === 'viewid') {
+                    request.ids.forEach((id) => {
+                        chrome.storage.local.get(
+                            ['viewIdEnabled'],
+                            (settings) => {
+                                if (settings.viewIdEnabled) {
+                                    menusApi.create({
+                                        id: `rovalra-viewid-${id}`,
+                                        title: request.data.title,
+                                        contexts: ['link'],
+                                        documentUrlPatterns: [
+                                            '*://*.roblox.com/*',
+                                        ],
+                                    });
+                                }
                         });
-                    },
-                );
+                    })
+                }
             }
             return false;
     }

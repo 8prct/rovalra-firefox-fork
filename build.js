@@ -119,6 +119,21 @@ esbuild
     })
     .catch(() => process.exit(1));
 
+esbuild
+    .build({
+        ...commonConfig,
+        stdin: {
+            contents:
+                "import SwaggerUIBundle from 'swagger-ui-dist/swagger-ui-bundle.js'; export default SwaggerUIBundle;",
+            resolveDir: __dirname,
+            sourcefile: 'swagger-ui-entry.js',
+        },
+        outfile: 'dist/swagger-ui-bundle.js',
+        bundle: true,
+        format: 'esm',
+    })
+    .catch(() => process.exit(1));
+
 const cssDir = path.join(__dirname, 'src', 'css');
 
 if (sass && fs.existsSync(cssDir)) {

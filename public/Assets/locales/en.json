@@ -1,4 +1,7 @@
 {
+    "freeRobloxPlusThemes": {
+        "notice": "Select and use any theme without Roblox Plus."
+    },
     "items": {
         "hiddenFromMarketplace": "This item is hidden from the marketplace"
     },
@@ -378,20 +381,22 @@
             "title": "RoValra Information!",
             "desc1": "RoValra is an extension that's trying to make basic quality-of-life features free and accessible to everyone by making everything completely open-source.",
             "desc2": "Some free features still rely on RoValra servers and cost money to run.",
-            "desc3": "Supporter donations help cover those costs, letting RoValra keep more features free for everyone while continuing to improve over time. ❤️",
+            "desc3": "Supporter donations help cover those costs, letting RoValra keep more features free for everyone while continuing to improve over time. <icon style=\"color:#c13ad9\" filled>heart</icon>",
             "desc4": "RoValra is a passion project and has always been one.",
             "suggestions": "If you have any feature suggestions please let me know in my Discord server or via GitHub",
             "bugs": "If you find any bugs let me know in my Discord server or via GitHub",
-            "review": "If you like this extension please consider <a href=\"https://chromewebstore.google.com/detail/rovalra-roblox-improved/njcickgebhnpgmoodjdgohkclfplejli/reviews\" target=\"_blank\" class=\"rovalra-review-link\">leaving a review</a>, it helps a lot ❤️",
+            "review": "If you like this extension please consider <a href=\"https://chromewebstore.google.com/detail/rovalra-roblox-improved/njcickgebhnpgmoodjdgohkclfplejli/reviews\" target=\"_blank\" class=\"rovalra-review-link\">leaving a review</a>, it helps a lot <icon style=\"color:#c13ad9\" filled>heart</icon>",
             "discord": "Discord Server",
-            "github": "Github Repo",
+            "github": "Github Repository",
             "support": "Support RoValra",
-            "tiktok": "TikTok: ValraWantBanana",
-            "x": "X: ValraSwag"
+            "tiktok": "ValraWantBanana",
+            "x": "ValraSwag"
         },
         "credits": {
-            "firefoxPort": "Firefox and Zen Browser port maintained by <b style=\"font-weight: bold;\">8prct</b>. Original RoValra created by <b style=\"font-weight: bold;\">NotValra</b> and its contributors.",
             "contributorsTitle": "Contributors",
+            "firefoxPort": "Firefox and Zen Browser port maintained by <b style=\"font-weight: bold;\">8prct</b>. Original RoValra created by <b style=\"font-weight: bold;\">NotValra</b> and its contributors.",
+            "featureCount_one": "{{count}} feature",
+            "featureCount_other": "{{count}} features",
             "contributorTooltips": {
                 "146089324": "WoozyNate made fisch, which is where the old RoValra logo is from. You should check out fisch!",
                 "1337447242": "Made the new logo and all store page images.",
@@ -406,7 +411,49 @@
             "contributionCount_other": "Contributed to {{count}} features",
             "backendContributorsNote": "These people helped with non feature related things.",
             "loadingContributors": "Loading...",
-            "failedToLoadContributors": "Failed to load contributors."
+            "failedToLoadContributors": "Failed to load contributors.",
+            "otherContributions": {
+                "badges": {
+                    "translatorAndNate": "Added translator badge and WoozyNate badge",
+                    "nateGilbertFix": "Fix nates badge to be gilbert again"
+                },
+                "caching": {
+                    "hashmap": "Added hashmap to the cache handler"
+                },
+                "sidebar": {
+                    "rblxUpdateFix": "Fixed the sidebar for a Roblox update"
+                },
+                "rbxm": {
+                    "fixDesyncCframe": "Fixed RBXM parser desync and CFRAME format"
+                },
+                "markdown": {
+                    "untrustedMd": "Added limited markdown parser for untrusted users"
+                },
+                "settingsHandler": {
+                    "unifiedApi": "Added unified settings API"
+                },
+                "contributorList": {
+                    "creditsImprovement": "Improved credits in the contributor list",
+                    "nonSettingCredits": "Add credits for features and improvements that don't have their own settings"
+                },
+                "donatorTierPage": {
+                    "newIndicators": "Added new indicators for donator tiers"
+                },
+                "iconElement": {
+                    "addIcons": "Added the `<icon>` element that allows using Builder Icons, Material Icons, and RoValra Icons.",
+                    "addElement": "Added the base `<icon>` element that allows using Builder Icons. Prev, going to use the built-in `<i>` element with classes.",
+                    "makeRoValraIcons": "Added a font for RoValra Icons + a new building method for the website.",
+                    "addBuilderIconsWOFF": "Added hosting for Builder Icons on the RoValra Website, as well as different font files that are less in size."
+                }
+            },
+            "ui": {
+                "popup": {
+                    "title": "{{user}}'s Contributions",
+                    "contributor": "Contributor",
+                    "featureName": "Feature",
+                    "featureKey": "(Dev) Feature Key"
+                }
+            }
         },
         "donatorPerks": {
             "title": "Donator Perks!",
@@ -804,6 +851,7 @@
         "originProfileShare": "Profile Share",
         "originPhoneContacts": "Phone Contacts",
         "originPeopleYouMayKnow": "People You May Know",
+        "originschoolmemberlist": "School Member List",
         "originFriendLink": "Friend Link",
         "originUnknown": "Unknown"
     },
@@ -1043,9 +1091,23 @@
             "user": "User"
         }
     },
+    "viewid": {
+        "viewId": "View IDs",
+        "popup": {
+            "title": "Item IDs",
+            "button": {
+                "copy": "Copy Data",
+                "copyMd": "Copy Markdown Data"
+            }
+        }
+    },
     "friendsListOverlay": {
         "title": "Friends playing {{gameName}}",
         "join": "Join"
+    },
+    "friendUsernames": {
+        "ariaLabel": "Username: @{{username}}",
+        "nameWithUsername": "{{displayName}} (@{{username}})"
     },
     "placeVisits": {
         "label": "{{count}} Place Visits",
@@ -1060,16 +1122,24 @@
         "tab": "Showcase",
         "favoriteGame": "Favourite experience",
         "favoriteGroup": "Favourite community",
+        "favoriteDecal": "Art Showcase",
         "chooseGame": "Choose an experience to feature on your profile.",
         "noFeaturedGame": "No featured experience yet. :C",
         "chooseGroup": "Choose a community to feature on your profile.",
         "noFeaturedGroup": "No featured community yet. :,(",
+        "chooseDecal": "Enter a decal ID to feature an image on your profile.",
+        "noFeaturedDecal": "No featured image yet. :C",
         "searchGame": "Search for an experience to feature",
         "searchGroup": "Search for a community to feature",
         "clearGame": "Clear favourite experience",
         "clearGroup": "Clear favourite community",
         "gameOptions": "Favourite experience options",
         "groupOptions": "Favourite community options",
+        "decalId": "Decal ID",
+        "decalImageOptions": "Image options",
+        "openImagePage": "Open image page",
+        "report": "Report",
+        "clearDecal": "Clear Image",
         "by": "By",
         "maturity": "Maturity",
         "maturityUnavailable": "Maturity unavailable",

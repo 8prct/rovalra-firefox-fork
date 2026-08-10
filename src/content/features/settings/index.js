@@ -1,8 +1,5 @@
 import { getAssets } from '../../core/assets.js';
-import {
-    getRegionData,
-    loadDatacenterMap,
-} from '../../core/regions.js';
+import { getRegionData, loadDatacenterMap } from '../../core/regions.js';
 import { observeElement, observeIntersection } from '../../core/observer.js';
 import { generateSingleSettingHTML } from '../../core/settings/generateSettings.js';
 import { SETTINGS_CONFIG } from '../../core/settings/settingConfig.js';
@@ -32,8 +29,11 @@ import { callRobloxApi, callRobloxApiJson } from '../../core/api.js';
 import { safeHtml } from '../../core/packages/dompurify';
 import DOMPurify from 'dompurify';
 import { BADGE_CONFIG } from '../../core/configs/badges.js';
-import { ts } from '../../core/locale/i18n.js';
-import { CONTRIBUTOR_USER_IDS } from '../../core/configs/userIds.js';
+import { t, ts } from '../../core/locale/i18n.js';
+import {
+    CONTRIBUTOR_USER_IDS,
+    CREATOR_USER_ID,
+} from '../../core/configs/userIds.js';
 import { createOverlay } from '../../core/ui/overlay.js';
 import { createInteractiveTimestamp } from '../../core/ui/time/time.js';
 import { createStyledInput } from '../../core/ui/catalog/input.js';
@@ -74,15 +74,27 @@ import {
 import { showConfirmationPrompt } from '../../core/ui/confirmationPrompt.js';
 import { createSpinner } from '../../core/ui/spinner.js';
 import { createButton } from '../../core/ui/buttons.js';
+import { ChangeIcon, Icon } from '../../core/ui/buildericon.js';
+import { CUSTOM_ADDED_TAGS } from '../../core/utils/purifyCfg.js';
+import { OTHER_CONTRIBUTIONS } from '../../core/configs/otherContributions.js';
 
 const assets = getAssets();
+const CREDITS_USER_IDS = [
+    ...new Set([CREATOR_USER_ID, ...CONTRIBUTOR_USER_IDS]),
+];
 let REGIONS = {};
 
-const DONATOR_PERKS_UNIVERSE_ID = '9452973012'
+const DONATOR_PERKS_UNIVERSE_ID = '9452973012';
 const DONATOR_PERKS_GAME_URL =
     'https://www.roblox.com/games/store-section/' + DONATOR_PERKS_UNIVERSE_ID;
 const DONATOR_PERKS_FALLBACK_ONSALE_URL =
-    'https://www.roblox.com/catalog?taxonomy=tZsUsd2BqGViQrJ9Vs3Wah&CreatorName=Valra&CreatorType=Group&salesTypeFilter=1';
+    'https://www.roblox.com/catalog?taxonomy=2a2rf9qyeTd8W5iegK2Prc&CreatorName=Valra&CreatorType=Group&salesTypeFilter=1';
+let requestedDonatorGameUnblock = false;
+let requestedDonatorGameUnblockChecked = false;
+let donatorGameUnblockConsentId = 0;
+let parentAttchedToAccount = false;
+let parentAttchedToAccountChecked = false;
+
 const CHANGELOGS_ENDPOINT = '/static/json/changelogs.json';
 
 const RESTRICTION_LEVELS = [
@@ -231,11 +243,11 @@ async function renderChangelogs(container) {
 }
 
 async function openDonatorPerksDonationUrl() {
-    var canPlayUniverse = false;
-    var canPlayUniverseReason = "Unknown";
-    var accountHasParentAttached = false;
-    var donationPerksSelectedUrl = DONATOR_PERKS_FALLBACK_ONSALE_URL;
-    const btn = document.querySelector('#rovalra-donator-perks-donation-button')
+    let canPlayUniverse = false;
+    let canPlayUniverseReason = 'Unknown';
+    const btn = document.querySelector(
+        '#rovalra-donator-perks-donation-button',
+    );
 
     btn.dataset.rovalraDonatorPerksDonationButtonLoading = true;
 
@@ -267,36 +279,113 @@ async function openDonatorPerksDonationUrl() {
                 endpoint: '/child-requests-api/v1/send-request-to-all-parents',
                 method: 'POST',
                 body: {
-                    requestType: "ManageExperience",
+                    requestType: 'ManageExperience',
                     requestDetails: {
                         universeId: String(DONATOR_PERKS_UNIVERSE_ID),
-                        experienceManagementAction: "Approve"
-                    }
+                        experienceManagementAction: 'Approve',
+                    },
                 },
             });
 
             const universeDetailsRequest = await callRobloxApi({
-                subdomain: 'apis',
+                subdomain: 'games',
                 endpoint: '/v1/games?universeIds=' + DONATOR_PERKS_UNIVERSE_ID,
                 method: 'GET',
             });
-            const universeDetails = (await universeDetailsRequest.json())[0];
+            const universeDetails = (await universeDetailsRequest.json())
+                .data[0];
 
             loadingOverlay.close();
 
             const requestSentOverlay = createOverlay({
-                title: "Request Sent!",
-                bodyContent: 'Your request was sent to your parents and guardians via email.' + ( universeDetailsRequest.ok ? '<br />The experience name is: ' + DOMPurify.sanitize(universeDetails.name) : ''),
-                actions: [ createButton('OK', 'secondary', { onClick: () => { requestSentOverlay.close(); } }), ],
+                title: 'Request Sent!',
+                bodyContent:
+                    'Your request was sent to your parents and guardians via email.' +
+                    (universeDetailsRequest.ok
+                        ? '<br />The experience name is: <b>' +
+                          DOMPurify.sanitize(universeDetails.name) +
+                          '</b>'
+                        : ''),
+                actions: [
+                    createButton('OK', 'secondary', {
+                        onClick: () => {
+                            requestSentOverlay.close();
+                        },
+                    }),
+                ],
                 showLogo: true,
             });
 
-        } catch {
+            requestedDonatorGameUnblockChecked = false;
+        } catch (error) {
+            console.warn('[RoValra Unblock Request] Error:', error);
             loadingOverlay.close();
             const requestFailedOverlay = createOverlay({
-                title: "Request Failed to Send",
-                bodyContent: 'Your request failed to send for an unknown reason',
-                actions: [ createButton('OK', 'secondary', { onClick: () => { requestFailedOverlay.close(); } }), ],
+                title: 'Request Failed to Send',
+                bodyContent:
+                    'Your request failed to send for an unknown reason. Maybe you have been ratelimited. Check console for more details.',
+                actions: [
+                    createButton('OK', 'secondary', {
+                        onClick: () => {
+                            requestFailedOverlay.close();
+                        },
+                    }),
+                ],
+                showLogo: true,
+            });
+        }
+        btn.dataset.rovalraDonatorPerksDonationButtonLoading = false;
+    }
+
+    async function overlayCancelRequest(
+        consentId = donatorGameUnblockConsentId,
+    ) {
+        btn.dataset.rovalraDonatorPerksDonationButtonLoading = true;
+        const loadingOverlay = createOverlay({
+            title: 'Canceling Request',
+            bodyContent: 'Please wait...',
+            showLogo: true,
+        });
+        try {
+            await callRobloxApiJson({
+                subdomain: 'apis',
+                endpoint: '/child-requests-api/v1/cancel-consent-request',
+                method: 'POST',
+                body: {
+                    consentId,
+                },
+            });
+
+            loadingOverlay.close();
+
+            const cancelRequestSentOverlay = createOverlay({
+                title: 'Canceled Request',
+                bodyContent:
+                    'Your request to your parents and guardians were canceled',
+                actions: [
+                    createButton('OK', 'secondary', {
+                        onClick: () => {
+                            cancelRequestSentOverlay.close();
+                        },
+                    }),
+                ],
+                showLogo: true,
+            });
+
+            requestedDonatorGameUnblockChecked = false;
+        } catch {
+            loadingOverlay.close();
+            const cancelRequestFailedOverlay = createOverlay({
+                title: 'Request Cancellation Failed',
+                bodyContent:
+                    'Cancellation for your unblock request failed. Maybe you have been ratelimited. Check console for more details.',
+                actions: [
+                    createButton('OK', 'secondary', {
+                        onClick: () => {
+                            cancelRequestFailedOverlay.close();
+                        },
+                    }),
+                ],
                 showLogo: true,
             });
         }
@@ -304,43 +393,129 @@ async function openDonatorPerksDonationUrl() {
     }
 
     try {
-        const canPlayUniverseRequest = (await callRobloxApiJson({
-            subdomain: 'games',
-            endpoint: '/v1/games/multiget-playability-status?universeIds=' + DONATOR_PERKS_UNIVERSE_ID,
-            method: 'GET',
-        }))[0];
-        canPlayUniverse = canPlayUniverseRequest.isPlayable;
-        canPlayUniverseReason = canPlayUniverseRequest.playabilityStatus
-    } catch (error) {
-        console.warn('RoValra: Failed to get playability status of donation universe', error);
-    }
-    try {
-        if (canPlayUniverse == false && canPlayUniverseReason == 'ContextualPlayabilityRequireParentApproval') {
-            const approveExperienceRecourse = await callRobloxApiJson({
-                subdomain: 'apis',
-                endpoint: '/access-management/v1/upsell-feature-access?featureName=CanApproveExperience&extraParameters=W10=',
+        const canPlayUniverseRequest = (
+            await callRobloxApiJson({
+                subdomain: 'games',
+                endpoint:
+                    '/v1/games/multiget-playability-status?universeIds=' +
+                    DONATOR_PERKS_UNIVERSE_ID,
                 method: 'GET',
-            });
-            accountHasParentAttached = approveExperienceRecourse.recourse.includes('ParentConsent');
-        }
+            })
+        )[0];
+        canPlayUniverse = canPlayUniverseRequest.isPlayable;
+        canPlayUniverseReason = canPlayUniverseRequest.playabilityStatus;
     } catch (error) {
-        console.warn('RoValra: Failed to see if there were any parents linked to account for game unblock overlay', error);
+        console.warn(
+            'RoValra: Failed to get playability status of donation universe',
+            error,
+        );
     }
 
-    if (canPlayUniverse == false && canPlayUniverseReason == 'ContextualPlayabilityRequireParentApproval' && accountHasParentAttached) {
+    try {
+        if (
+            !parentAttchedToAccountChecked &&
+            !parentAttchedToAccount &&
+            !canPlayUniverse &&
+            canPlayUniverseReason ==
+                'ContextualPlayabilityRequireParentApproval'
+        ) {
+            const approveExperienceRecourse = await callRobloxApiJson({
+                subdomain: 'apis',
+                endpoint:
+                    '/access-management/v1/upsell-feature-access?featureName=CanApproveExperience&extraParameters=W10=',
+                method: 'GET',
+            });
+            parentAttchedToAccountChecked = true;
+            parentAttchedToAccount =
+                approveExperienceRecourse.recourse.includes('ParentConsent');
+        }
+    } catch (error) {
+        console.warn(
+            'RoValra: Failed to see if there were any parents linked to account for game unblock overlay',
+            error,
+        );
+    }
+
+    try {
+        if (parentAttchedToAccount && !requestedDonatorGameUnblockChecked) {
+            const consentsPending = await callRobloxApiJson({
+                subdomain: 'apis',
+                endpoint:
+                    '/parental-controls-api/v1/parental-controls/consents?consentStatus=Pending&childUserId=' +
+                    (await getAuthenticatedUserId()),
+                method: 'GET',
+            });
+
+            requestedDonatorGameUnblock = consentsPending.consents.some(
+                (consent) =>
+                    consent.consentType === 'ManageExperience' &&
+                    consent.consentData.experienceManagementAction ===
+                        'Approve' &&
+                    consent.consentData.universeId ===
+                        String(DONATOR_PERKS_UNIVERSE_ID),
+            );
+
+            requestedDonatorGameUnblockChecked = true;
+
+            if (requestedDonatorGameUnblock) {
+                donatorGameUnblockConsentId = consentsPending.consents.find(
+                    (consent) =>
+                        consent.consentType === 'ManageExperience' &&
+                        consent.consentData.experienceManagementAction ===
+                            'Approve' &&
+                        consent.consentData.universeId ===
+                            String(DONATOR_PERKS_UNIVERSE_ID),
+                ).id;
+            } else donatorGameUnblockConsentId = 0;
+        }
+    } catch (error) {
+        console.warn('RoValra: Failed to get parent requests of a user', error);
+    }
+
+    if (
+        canPlayUniverse == false &&
+        canPlayUniverseReason == 'ContextualPlayabilityRequireParentApproval' &&
+        parentAttchedToAccount
+    ) {
         showConfirmationPrompt({
-            title: "Help Support RoValra More!",
-            message: "RoValra gets more of the donation cut when using gamepasses. We see you have at least 1 parent account linked. You can request to unblock the experience so RoValra gets a better cut versus using 2D (and 3D) clothing.",
+            title: 'Help Support RoValra More!',
+            message:
+                'RoValra gets more of the donation cut when using gamepasses. We see you have at least 1 parent account linked. You can request to unblock the experience so RoValra gets a better cut versus using 2D (and 3D) clothing.',
             confirmText: 'Send Unblock Request',
             confirmType: 'primary',
             cancelText: 'Use Marketplace',
             cancelType: 'secondary',
-            onConfirm: overlayUnblockGame,
+            onConfirm: !requestedDonatorGameUnblock
+                ? overlayUnblockGame
+                : () => {
+                      btn.dataset.rovalraDonatorPerksDonationButtonLoading = false;
+                      const alreadyRequestedOverlay = createOverlay({
+                          title: 'Already Requested',
+                          bodyContent:
+                              'You already requested the experience silly!',
+                          actions: [
+                              createButton('Cancel', 'alert', {
+                                  onClick: () => {
+                                      alreadyRequestedOverlay.close();
+                                      overlayCancelRequest();
+                                  },
+                              }),
+                              createButton('Okay', 'primary', {
+                                  onClick: () => {
+                                      alreadyRequestedOverlay.close();
+                                  },
+                              }),
+                          ],
+                          showLogo: true,
+                      });
+                  },
             onCancel: () => {
                 btn.dataset.rovalraDonatorPerksDonationButtonLoading = false;
                 openPopup(DONATOR_PERKS_FALLBACK_ONSALE_URL);
             },
-            onCloseBtn: () => { btn.dataset.rovalraDonatorPerksDonationButtonLoading = false; },
+            onCloseBtn: () => {
+                btn.dataset.rovalraDonatorPerksDonationButtonLoading = false;
+            },
             closeBtnCallsCancel: false,
         });
     } else {
@@ -348,7 +523,7 @@ async function openDonatorPerksDonationUrl() {
         openPopup(
             canPlayUniverse
                 ? DONATOR_PERKS_GAME_URL
-                : DONATOR_PERKS_FALLBACK_ONSALE_URL
+                : DONATOR_PERKS_FALLBACK_ONSALE_URL,
         );
     }
 }
@@ -360,7 +535,9 @@ function renderDonatorPerksDonationButton(container = document) {
     if (!holder || holder.dataset.rovalraDonationButtonRendered === 'true')
         return;
 
-    const spinner = createSpinner({ className: 'rovalra-donator-perks-donation-btn-spinner' });
+    const spinner = createSpinner({
+        className: 'rovalra-donator-perks-donation-btn-spinner',
+    });
     const text = document.createElement('span');
     text.classList.add('rovalra-donator-perks-donation-btn-content');
     text.textContent = 'Donate';
@@ -368,7 +545,7 @@ function renderDonatorPerksDonationButton(container = document) {
     holder.dataset.rovalraDonationButtonRendered = 'true';
     holder.replaceChildren(
         createSquareButton({
-            content: [text, spinner,],
+            content: [text, spinner],
             id: 'rovalra-donator-perks-donation-button',
             onClick: openDonatorPerksDonationUrl,
             width: 'auto',
@@ -386,7 +563,7 @@ function getUserProfileHref(userId) {
 
 function debounce(func, wait) {
     let timeout;
-    return function(...args) {
+    return function (...args) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
@@ -559,7 +736,7 @@ function createArtistCreditSection(artistId) {
                 const data = { name, thumb: thumbnails[0] };
                 artistCache.set(String(artistId), data);
                 applyData(data);
-            } catch (e) { }
+            } catch (e) {}
         })();
     }
 
@@ -738,7 +915,7 @@ async function openBorderOverlay(
             { position: 'top' },
         );
         actionBtn.onclick = async () => {
-            updateUserSettingViaApi('border', variant.link).catch(() => { });
+            updateUserSettingViaApi('border', variant.link).catch(() => {});
             updatePreviewAndUI(
                 variant.value,
                 variant.link,
@@ -876,12 +1053,14 @@ function renderDonatorPerkStatusPills(container) {
             const isIncluded =
                 cell.dataset.rovalraDonatorPerkIncluded === 'true';
             const label = isIncluded ? 'Included' : 'Not included';
-            const symbol = document.createElement('span');
-            symbol.className =
-                'grow-0 shrink-0 basis-auto icon size-[var(--icon-size-small)] ' +
-                (isIncluded
-                    ? 'icon-filled-circle-check'
-                    : 'rovalra-icon-filled-circle-minus');
+            const symbol = Icon({
+                icon: isIncluded ? 'circle-check' : 'circle-minus',
+                filled: true,
+                size: 'medium',
+                classes: isIncluded
+                    ? 'rovalra-donator-perk-status-icon-included'
+                    : 'rovalra-donator-perk-status-icon-not-included',
+            });
 
             addTooltip(symbol, label, { position: 'top' });
 
@@ -924,26 +1103,26 @@ function getDonatorPerksComparisonHtml(themeColors) {
     const body =
         rows.length > 0
             ? rows
-                .map(
-                    ({ label, minTier }) => `
+                  .map(
+                      ({ label, minTier }) => `
                         <tr>
                             <th scope="row">${label}</th>
                             ${[1, 2, 3]
-                            .map((tier) =>
-                                getDonatorPerkStatusCell(tier >= minTier),
-                            )
-                            .join('')}
+                                .map((tier) =>
+                                    getDonatorPerkStatusCell(tier >= minTier),
+                                )
+                                .join('')}
                         </tr>`,
-                )
-                .join('')
+                  )
+                  .join('')
             : `<tr><th scope="row" colspan="4">${ts('settings.donatorPerks.moreComingSoon')}</th></tr>`;
 
     return `
         <div class="rovalra-donator-perks-compare" aria-label="${ts('settings.donatorPerks.perkTiers')}">
             <div class="rovalra-donator-tier-summary">
                 ${[1, 2, 3]
-            .map(
-                (tier) => `
+                    .map(
+                        (tier) => `
                             <div id="donator-tier-${tier}-header" class="rovalra-donator-tier-heading">
                                 <img ${getBadgeAssetAttribute(`donator_${tier}`)} src="${BADGE_CONFIG[`donator_${tier}`].icon}" alt="" style="${getBadgeStyle(`donator_${tier}`)}" />
                                 <div class="rovalra-donator-tier-copy">
@@ -951,8 +1130,8 @@ function getDonatorPerksComparisonHtml(themeColors) {
                                     <p>${parseMarkdown(ts(`settings.donatorPerks.tier${tier}Desc`), themeColors)}</p>
                                 </div>
                             </div>`,
-            )
-            .join('')}
+                    )
+                    .join('')}
             </div>
             <div class="rovalra-donator-perks-table-wrap">
                 <table class="rovalra-donator-perks-table">
@@ -973,29 +1152,124 @@ function getDonatorPerksComparisonHtml(themeColors) {
 let contributorsCache = null;
 let contributorsSortOrder = 'most';
 
-function getContributorContributionCounts() {
-    const counts = new Map(CONTRIBUTOR_USER_IDS.map((id) => [String(id), 0]));
+function getContributorStats() {
+    const counts = new Map(CREDITS_USER_IDS.map((id) => [String(id), 0]));
+    let featureCount = 0;
 
-    const countSetting = (setting) => {
+    const countContributors = (setting, { isChild = false } = {}) => {
         if (!setting) return;
 
-        if (Array.isArray(setting.contributors)) {
-            new Set(setting.contributors.map(String)).forEach((id) => {
-                if (counts.has(id)) counts.set(id, counts.get(id) + 1);
-            });
-        }
+        const contributors = Array.isArray(setting.contributors)
+            ? new Set(setting.contributors.map(String))
+            : new Set();
 
-        Object.values(setting.childSettings || {}).forEach(countSetting);
+        if (!isChild && contributors.size === 0)
+            contributors.add(String(CREATOR_USER_ID));
+
+        contributors.forEach((id) => {
+            if (counts.has(id)) counts.set(id, counts.get(id) + 1);
+        });
+    };
+
+    const countSetting = (setting, options) => {
+        if (!setting) return;
+
+        countContributors(setting, options);
+
+        Object.values(setting.childSettings || {}).forEach((childSetting) =>
+            countSetting(childSetting, { isChild: true }),
+        );
     };
 
     Object.values(SETTINGS_CONFIG).forEach((category) => {
-        Object.values(category.settings || {}).forEach(countSetting);
+        Object.values(category.settings || {}).forEach((setting) => {
+            featureCount += 1;
+            countSetting(setting);
+        });
     });
 
-    return counts;
+    Object.values(OTHER_CONTRIBUTIONS).forEach((category) => {
+        const contributors = category.contributors;
+        for (const contributor of contributors) {
+            const id = contributor.userId;
+            if (counts.has(id)) counts.set(id, counts.get(id) + 1);
+            featureCount += 1;
+        }
+    });
+
+    return { counts, featureCount };
 }
 
-const contributorContributionCounts = getContributorContributionCounts();
+/**
+ * @returns {Record<string, Array<{key: string, feature: string, contributionDescription?: string, prLink?: string}>>}
+ */
+function getContributions() {
+    /**
+     * @type {Record<string, Array<{key: string, feature: string, contributionDescription?: string, prLink?: string}>>}
+     */
+    const contributions = {};
+    for (const contributor of CONTRIBUTOR_USER_IDS) {
+        contributions[String(contributor)] = [];
+    }
+    for (const category of Object.values(SETTINGS_CONFIG)) {
+        for (const [settingName, settingData] of Object.entries(
+            category.settings,
+        )) {
+            if (settingData.contributors !== undefined) {
+                for (const contributor of settingData.contributors) {
+                    if (contributions[String(contributor)] === undefined)
+                        contributions[String(contributor)] = [];
+                    contributions[String(contributor)].push({
+                        feature: settingData.label,
+                        key: settingName,
+                    });
+                }
+            } else {
+                if (contributions[String(CREATOR_USER_ID)] === undefined)
+                    contributions[String(CREATOR_USER_ID)] = [];
+                contributions[String(CREATOR_USER_ID)].push({
+                    feature: settingData.label,
+                    key: settingName,
+                });
+            }
+            if (settingData.childSettings) {
+                for (const [subSettingName, subSettingData] of Object.entries(
+                    settingData.childSettings,
+                )) {
+                    if (subSettingData.contributors !== undefined) {
+                        for (const contributor of subSettingData.contributors) {
+                            if (
+                                contributions[String(contributor)] === undefined
+                            )
+                                contributions[String(contributor)] = [];
+                            contributions[String(contributor)].push({
+                                feature: subSettingData.label,
+                                key: subSettingName,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (const [contKey, contData] of Object.entries(OTHER_CONTRIBUTIONS)) {
+        for (const contribution of contData.contributors) {
+            contributions[String(contribution.userId)].push({
+                feature: contData.label,
+                key: contKey,
+                contributionDescription: contribution.contributionDescription,
+                prLink: contribution.relevantPR,
+            });
+        }
+    }
+
+    return contributions;
+}
+
+const {
+    counts: contributorContributionCounts,
+    featureCount: totalFeatureCount,
+} = getContributorStats();
 
 function addContributorTooltip(link, id) {
     const tooltipKey = `settings.credits.contributorTooltips.${id}`;
@@ -1046,7 +1320,7 @@ function createContributorProfile(user, thumbData) {
 function renderContributors(container, users, thumbMap) {
     container.replaceChildren();
 
-    const contributors = CONTRIBUTOR_USER_IDS.map((id, index) => {
+    const contributors = CREDITS_USER_IDS.map((id, index) => {
         const stringId = String(id);
         return {
             id: stringId,
@@ -1117,11 +1391,50 @@ function renderContributors(container, users, thumbMap) {
             count: contributionCount,
         });
 
-        link.append(
+        count.addEventListener('click', async (ev) => {
+            const contributions = getContributions()[String(id)];
+
+            let markdown = `
+| ${await t('settings.credits.ui.popup.contributor')} | ${await t('settings.credits.ui.popup.featureName')} | ${await t('settings.credits.ui.popup.featureKey')} |
+|              -                                 |                   -                            |                       -                       |
+`;
+
+            for (const contribution of contributions) {
+                markdown += `| [${user.displayName}](${link.href}) | `;
+                const featureNameText = contribution.contributionDescription
+                    ? `${contribution.feature} (${await t(contribution.contributionDescription)})`
+                    : contribution.feature;
+                markdown += `${contribution.prLink ? `[${featureNameText}](${contribution.prLink})` : featureNameText} | `;
+                markdown += `${contribution.prLink ? `[${contribution.key}](${contribution.prLink})` : contribution.key} |\n`;
+            }
+
+            const html = parseMarkdown(markdown);
+
+            const bodyContent = document.createElement('div');
+            bodyContent.innerHTML = html;
+
+            const okayBtn = createButton('Okay', 'primary', {
+                onClick: async () => {
+                    overlay.close();
+                },
+            });
+
+            const overlay = createOverlay({
+                title: await t('settings.credits.ui.popup.title', {
+                    user: user.displayName,
+                }),
+                bodyContent: bodyContent,
+                actions: [okayBtn],
+                showLogo: true,
+                maxWidth: '50%',
+            });
+        });
+
+        link.appendChild(
             createContributorProfile(user, thumbMap.get(String(id))),
-            count,
         );
         item.appendChild(link);
+        item.appendChild(count);
         listContainer.appendChild(item);
     });
 
@@ -1157,7 +1470,7 @@ function renderContributorsShimmer(container) {
     const listContainer = document.createElement('ol');
     listContainer.className = 'rovalra-contributors-list';
 
-    CONTRIBUTOR_USER_IDS.forEach(() => {
+    CREDITS_USER_IDS.forEach(() => {
         const item = document.createElement('li');
         item.className = 'rovalra-donator-card rovalra-contributor-loading-row';
 
@@ -1216,7 +1529,7 @@ async function loadContributors() {
             endpoint: '/v1/users',
             method: 'POST',
             body: {
-                userIds: CONTRIBUTOR_USER_IDS,
+                userIds: CREDITS_USER_IDS,
                 excludeBannedUsers: false,
             },
         });
@@ -1226,7 +1539,7 @@ async function loadContributors() {
         const users = data.data;
 
         const thumbnails = await getBatchThumbnails(
-            CONTRIBUTOR_USER_IDS,
+            CREDITS_USER_IDS,
             'AvatarHeadshot',
             '150x150',
         );
@@ -1307,30 +1620,30 @@ function renderTopDonators(container, donators, thumbMap, currentUserId) {
         const podiumData = [
             donators[2]
                 ? {
-                    ...donators[2],
-                    rank: 3,
-                    color: '#cd7f32',
-                    height: '60px',
-                    size: '64px',
-                }
+                      ...donators[2],
+                      rank: 3,
+                      color: '#cd7f32',
+                      height: '60px',
+                      size: '64px',
+                  }
                 : null,
             donators[0]
                 ? {
-                    ...donators[0],
-                    rank: 1,
-                    color: '#ffd700',
-                    height: '100px',
-                    size: '80px',
-                }
+                      ...donators[0],
+                      rank: 1,
+                      color: '#ffd700',
+                      height: '100px',
+                      size: '80px',
+                  }
                 : null,
             donators[1]
                 ? {
-                    ...donators[1],
-                    rank: 2,
-                    color: '#c0c0c0',
-                    height: '80px',
-                    size: '72px',
-                }
+                      ...donators[1],
+                      rank: 2,
+                      color: '#c0c0c0',
+                      height: '80px',
+                      size: '72px',
+                  }
                 : null,
         ].filter(Boolean);
 
@@ -1844,14 +2157,25 @@ export const buttonData = [
                                             <p>${ts('settings.info.review')}</p>
                                         </div>
                                         <div style="margin-top: 10px; margin-bottom: 20px;">
-                                            <a href="https://discord.gg/GHd5cSKJRk" target="_blank" class="rovalra-discord-link">${ts('settings.info.discord')}</a>
-                                            <a href="https://github.com/8prct/rovalra-firefox-fork" target="_blank" class="rovalra-github-link">
-                                                ${ts('settings.info.github')}
-                                                <img data-rovalra-asset="rovalraIcon" src="${assets.rovalraIcon}" style="width: 20px; height: 20px; margin-right: 0px; vertical-align: middle;" />
+                                            <a href="https://discord.gg/GHd5cSKJRk" target="_blank" class="rovalra-discord-link">
+                                                <icon>discord</icon> ${ts('settings.info.discord')}
                                             </a>
-                                            <a href="https://www.roblox.com/my/account?rovalra=donator+perks" class="rovalra-roblox-link">${ts('settings.info.support')}</a>
-                                            <a href="https://www.tiktok.com/@valrawantbanana" target="_blank" class="rovalra-tiktok-link">${ts('settings.info.tiktok')}</a>
-                                            <a href="https://x.com/ValraSwag" target="_blank" class="rovalra-x-link">${ts('settings.info.x')}</a>
+                                            <br />
+                                            <a href="https://github.com/8prct/rovalra-firefox-fork" target="_blank" class="rovalra-github-link">
+                                                <icon filled>github</icon> ${ts('settings.info.github')}
+                                            </a>
+                                            <br />
+                                            <a href="https://www.roblox.com/my/account?rovalra=donator+perks" class="rovalra-donator-link">
+                                                <icon filled>heart</icon> ${ts('settings.info.support')}
+                                            </a>
+                                            <br />
+                                            <a href="https://www.tiktok.com/@valrawantbanana" target="_blank" class="rovalra-tiktok-link">
+                                                <icon size="large">tik-tok</icon> ${ts('settings.info.tiktok')}
+                                            </a>
+                                            <br />
+                                            <a href="https://x.com/ValraSwag" target="_blank" class="rovalra-x-link">
+                                                <icon>twitter</icon> ${ts('settings.info.x')}
+                                            </a>
                                         </div>
                                         <div id="export-import-buttons-container" style="border-top: 1px solid var(--rovalra-secondary-text-color); opacity: 0.8; padding-top: 15px; display: flex; justify-content: flex-start; gap: 10px;"></div>
                                     </div>
@@ -1871,11 +2195,8 @@ export const buttonData = [
         get content() {
             return `
             <div style="padding: 8px;">
-                <h2 style="margin-bottom: 10px; color: var(--rovalra-main-text-color) !important;">${ts('settings.credits.contributorsTitle')}</h2>
-                <p style="margin-bottom: 12px; color: var(--rovalra-secondary-text-color);">
-                    ${ts('settings.credits.firefoxPort')}
-                    <a href="https://github.com/8prct/rovalra-firefox-fork" target="_blank" class="rovalra-github-link">GitHub</a>
-                </p>
+                <p style="margin-bottom: 12px; color: var(--rovalra-secondary-text-color);">${ts('settings.credits.firefoxPort')} <a href="https://github.com/8prct/rovalra-firefox-fork" target="_blank">GitHub</a></p>
+                <h2 style="margin-bottom: 10px; color: var(--rovalra-main-text-color) !important;">${ts('settings.credits.contributorsTitle')} <span style="font-size: 12px; color: var(--rovalra-secondary-text-color);">(${ts('settings.credits.featureCount', { count: totalFeatureCount })})</span></h2>
                 <div id="rovalra-contributors-list"></div>
             </div>`;
         },
@@ -2066,12 +2387,11 @@ async function renderAccountStanding(container) {
     container.appendChild(discordCard);
 
     // Initial instant render assuming good standing
-    discordCard.innerHTML = DOMPurify.sanitize(`
+    discordCard.innerHTML = DOMPurify.sanitize(
+        `
         <div style="display: flex; align-items: flex-start; gap: 20px;">
             <div class="standing-status-icon-bg" style="width: 48px; height: 48px; border-radius: 50%; background-color: #23a55a; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background-color 0.3s;">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                    <path class="standing-status-icon-path" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                </svg>
+                <icon size="large" style="transform: translate(1px, 1px)">check-large</icon>
             </div>
             <div style="flex: 1;">
                 <h3 class="standing-status-title" style="margin: 0 0 8px 0; font-size: 18px; color: var(--rovalra-main-text-color);">Your account is in good standing.</h3>
@@ -2082,13 +2402,13 @@ async function renderAccountStanding(container) {
             <div style="height: 12px; background: rgba(128,128,128,0.2); border-radius: 6px; position: relative; margin-bottom: 25px;">
                 <div class="standing-status-fill" style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: #23a55a; border-radius: 6px; transition: width 0.5s ease, background-color 0.3s;"></div>
                 ${ACCOUNT_STANDING_LEVELS.map((level, index) => {
-        const leftPos =
-            (index / (ACCOUNT_STANDING_LEVELS.length - 1)) * 100;
-        return `
+                    const leftPos =
+                        (index / (ACCOUNT_STANDING_LEVELS.length - 1)) * 100;
+                    return `
                         <div class="standing-status-dot" data-index="${index}" style="position: absolute; left: ${leftPos}%; top: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; border-radius: 50%; background: ${index === 0 ? level.color : '#4f545c'}; border: 4px solid var(--rovalra-container-background-color); z-index: 2; transition: background 0.3s;"></div>
                         <div class="standing-status-label" data-index="${index}" style="font-size: 12px; font-weight: 600; color: ${index === 0 ? 'var(--rovalra-main-text-color)' : 'var(--rovalra-secondary-text-color)'}; opacity: ${index === 0 ? '1' : '0.5'}; text-align: center; width: 60px; margin-left: -30px; position: absolute; left: ${leftPos}%; margin-top: 15px; transition: color 0.3s, opacity 0.3s;">${level.label}</div>
                     `;
-    }).join('')}
+                }).join('')}
             </div>
         </div>
         <div class="standing-policy-anchor"></div>
@@ -2096,7 +2416,9 @@ async function renderAccountStanding(container) {
             <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: var(--rovalra-secondary-text-color);">RoValra Safety Policy</div>
             Accounts found in violation of the <a href="https://www.rovalra.com/tou/" target="_blank" style="color: inherit; text-decoration: underline;">RoValra Terms of Service</a> or deemed a risk via third-party detections will have specific features disabled. Please note that while specific online capabilities may be restricted, the RoValra safety team will <strong>never</strong> disable the entire extension or fully local features.
         </div>
-    `);
+    `,
+        { ...CUSTOM_ADDED_TAGS },
+    );
 
     if (standingCache) {
         updateAccountStandingUI(
@@ -2131,7 +2453,7 @@ function updateAccountStandingUI(discordCard, data, levels) {
     const isTemporary = Boolean(activeModeration?.moderation_expires_at);
 
     const iconBg = discordCard.querySelector('.standing-status-icon-bg');
-    const iconPath = discordCard.querySelector('.standing-status-icon-path');
+    const iconEl = iconBg.querySelector('icon');
     const statusTitle = discordCard.querySelector('.standing-status-title');
     const statusDesc = discordCard.querySelector('.standing-status-desc');
     const fill = discordCard.querySelector('.standing-status-fill');
@@ -2145,10 +2467,7 @@ function updateAccountStandingUI(discordCard, data, levels) {
 
     if (isGoodStanding) {
         iconBg.style.backgroundColor = '#23a55a';
-        iconPath.setAttribute(
-            'd',
-            'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
-        );
+        ChangeIcon(iconEl, { icon: 'check-large' });
         statusTitle.textContent = 'Your account is in good standing.';
         statusDesc.textContent =
             'You do not have any active violations or restrictions from the RoValra safety team.';
@@ -2156,10 +2475,7 @@ function updateAccountStandingUI(discordCard, data, levels) {
 
     if (!isGoodStanding) {
         iconBg.style.backgroundColor = '#f23f43';
-        iconPath.setAttribute(
-            'd',
-            'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
-        );
+        ChangeIcon(iconEl, { icon: 'x' });
         statusTitle.textContent = isTemporary
             ? 'Your account is temporarily limited.'
             : 'We found a violation on your account.';
@@ -2199,11 +2515,11 @@ function updateAccountStandingUI(discordCard, data, levels) {
                 <div style="color: #f23f43; font-weight: 600; font-size: 13px; margin-bottom: 8px;">Disabled Features</div>
                 <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                     ${disabledFeatures
-                    .map(
-                        (feature) =>
-                            `<div style="background: rgba(242, 63, 67, 0.1); padding: 4px 10px; border-radius: 6px; color: #f23f43; font-size: 11px; font-weight: 600; text-transform: capitalize;">${feature}</div>`,
-                    )
-                    .join('')}
+                        .map(
+                            (feature) =>
+                                `<div style="background: rgba(242, 63, 67, 0.1); padding: 4px 10px; border-radius: 6px; color: #f23f43; font-size: 11px; font-weight: 600; text-transform: capitalize;">${feature}</div>`,
+                        )
+                        .join('')}
                 </div>
             </div>`
                 : '';
@@ -2214,15 +2530,15 @@ function updateAccountStandingUI(discordCard, data, levels) {
                 <div style="color: #f23f43; font-weight: 600; font-size: 13px; margin-bottom: 8px;">Moderated Content</div>
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                     ${modContent
-                    .map(
-                        (item) => `
+                        .map(
+                            (item) => `
                         <div style="background: rgba(0,0,0,0.1); padding: 8px; border-radius: 8px;">
                             <div style="font-weight: 600; color: var(--rovalra-secondary-text-color); font-size: 12px; margin-bottom: 4px;">${item.config_key}</div>
                             <div style="font-size: 13px; color: var(--rovalra-main-text-color); word-break: break-all;">${item.content_value}</div>
                         </div>
                     `,
-                    )
-                    .join('')}
+                        )
+                        .join('')}
                 </div>
             </div>`
                 : '';
@@ -2241,10 +2557,11 @@ function updateAccountStandingUI(discordCard, data, levels) {
                 ${disabledFeaturesHtml}
                 ${modContentHtml}
                 <div style="margin-top: 10px; font-size: 11px; opacity: 0.7;" class="standing-mod-date">Moderated: </div>
-                ${isTemporary
-                ? '<div style="margin-top: 6px; font-size: 11px; opacity: 0.85;" class="standing-expiry-date">Temporary restriction expires: </div>'
-                : ''
-            }
+                ${
+                    isTemporary
+                        ? '<div style="margin-top: 6px; font-size: 11px; opacity: 0.85;" class="standing-expiry-date">Temporary restriction expires: </div>'
+                        : ''
+                }
             </div>
         `);
         const dateContainer = reasonHtml.querySelector('.standing-mod-date');
@@ -2858,8 +3175,8 @@ function createEquipButton(
     const tooltip = isSelected
         ? 'Click to unequip this border'
         : isOwned
-            ? 'Equip this border'
-            : 'Buy this border';
+          ? 'Equip this border'
+          : 'Buy this border';
 
     const pill = createPill(text, tooltip, { isButton: true });
     pill.setAttribute('data-equip-btn', variant.value);
@@ -2882,11 +3199,11 @@ function createEquipButton(
         const val = pill.getAttribute('data-equip-btn');
 
         if (currentText === 'Equipped') {
-            updateUserSettingViaApi('border', '').catch(() => { });
+            updateUserSettingViaApi('border', '').catch(() => {});
             updatePreviewAndUI('none', null, container, previewHolder);
         } else if (currentText === 'Equip') {
             const link = pill.getAttribute('data-variant-link');
-            updateUserSettingViaApi('border', link).catch(() => { });
+            updateUserSettingViaApi('border', link).catch(() => {});
             updatePreviewAndUI(val, link, container, previewHolder);
         } else if (currentText === 'Buy') {
             openBorderOverlay(
@@ -3531,7 +3848,7 @@ function initializeHeartbeatSpoofer() {
         }
     });
 
-    window.fetch = async function(...args) {
+    window.fetch = async function (...args) {
         const url = args[0] ? args[0].toString() : '';
         let isInternal = false;
 

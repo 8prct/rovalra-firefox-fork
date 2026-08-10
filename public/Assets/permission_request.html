@@ -1,41 +1,65 @@
 <!doctype html>
-<html>
+<html lang="en">
     <head>
         <meta charset="utf-8" />
-        <title>RoValra Permission Request</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>RoValra permission request</title>
         <style>
+            :root {
+                color-scheme: dark;
+                font-family: system-ui, sans-serif;
+                background: #18181b;
+                color: #f4f4f5;
+            }
             body {
-                background: #191b1d;
-                color: #f2f4f5;
-                font:
-                    14px system-ui,
-                    -apple-system,
-                    BlinkMacSystemFont,
-                    "Segoe UI",
-                    sans-serif;
                 margin: 0;
-                padding: 24px;
+                padding: 32px;
+            }
+            h1 {
+                font-size: 20px;
+                margin: 0 0 12px;
+            }
+            p {
+                color: #d4d4d8;
+                line-height: 1.5;
+            }
+            #permissions {
+                color: #f97316;
+                font-weight: 600;
+            }
+            .actions {
+                display: flex;
+                gap: 10px;
+                margin-top: 28px;
             }
             button {
-                background: #335fff;
                 border: 0;
                 border-radius: 8px;
-                color: white;
                 cursor: pointer;
+                padding: 10px 18px;
+                font: inherit;
                 font-weight: 600;
-                margin-right: 8px;
-                padding: 10px 14px;
             }
-            button.secondary {
-                background: #393b3d;
+            #allow {
+                background: #f97316;
+                color: white;
+            }
+            #cancel {
+                background: #3f3f46;
+                color: white;
             }
         </style>
     </head>
     <body>
-        <h2>RoValra needs extra permission</h2>
-        <p id="permission-list"></p>
-        <button id="allow">Allow</button>
-        <button id="deny" class="secondary">Deny</button>
+        <h1>Allow this RoValra feature?</h1>
+        <p>
+            Firefox requires a direct click before granting optional access.
+            This feature requests: <span id="permissions"></span>
+        </p>
+        <div class="actions">
+            <button id="allow" type="button">Allow</button>
+            <button id="cancel" type="button">Cancel</button>
+        </div>
         <script src="permission_request.js"></script>
     </body>
 </html>

@@ -1,28 +1,28 @@
 const params = new URLSearchParams(location.search);
 const requestId = params.get('requestId');
-const permissions = JSON.parse(params.get('permissions') || '[]').map((name) =>
-    name === 'contextMenus' ? 'menus' : name,
-);
+let permissions = [];
 
-document.getElementById('permission-list').textContent =
-    permissions.length > 0
-        ? `Requested permissions: ${permissions.join(', ')}`
-        : 'No extra permissions are required.';
+try {
+    permissions = JSON.parse(params.get('permissions') || '[]').filter(
+        Boolean,
+    );
+} catch {}
+
+document.getElementById('permissions').textContent =
+    permissions.join(', ') || 'none';
 
 function finish(granted) {
-    chrome.runtime.sendMessage({
-        action: 'permissionRequestResult',
-        requestId,
-        granted,
-    });
-    window.close();
+    chrome.runtime.sendMessage(
+        {
+            action: 'permissionRequestResult',
+            requestId,
+            granted: !!granted,
+        },
+        () => window.close(),
+    );
 }
 
 document.getElementById('allow').addEventListener('click', () => {
-    if (permissions.length === 0) return finish(true);
-    chrome.permissions.request({ permissions }, (granted) =>
-        finish(!!granted),
-    );
+    chrome.permissions.request({ permissions }, (granted) => finish(granted));
 });
-
-document.getElementById('deny').addEventListener('click', () => finish(false));
+document.getElementById('cancel').addEventListener('click', () => finish(false));

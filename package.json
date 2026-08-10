@@ -1,6 +1,6 @@
 {
   "name": "rovalra",
-  "version": "2.6.2",
+  "version": "2.6.4.1",
   "description": "Unofficial Firefox and Zen Browser port of RoValra.",
   "author": "8prct",
   "repository": {
@@ -11,9 +11,11 @@
   "scripts": {
     "build": "npm run clean && node build.js",
     "clean": "rimraf dist",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "node scripts/check-firefox-compat.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/chrome": "^0.2.2",
     "chrome-types": "^0.1.435",
     "esbuild": "^0.28.1",

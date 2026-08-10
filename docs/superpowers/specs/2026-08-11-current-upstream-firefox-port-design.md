@@ -14,7 +14,7 @@ Port RoValra upstream `main` commit `2ab800f19622f531f239332be17dadb5553e23d4` t
 
 - Use a Manifest V3 Firefox background module through `background.scripts`; Firefox does not support `background.service_worker`.
 - Preserve the existing Firefox/Zen MAIN-world injection bridge for request interception and server ID extraction at `document_start`.
-- Map Chrome's `contextMenus` permission and API to Firefox's `menus` permission and API while retaining a runtime fallback alias.
+- Map Chrome's `contextMenus` permission and API to Firefox's required `menus` permission and API; Mozilla's validator rejects menu permissions as optional.
 - Request optional permissions from an extension-owned popup because Firefox requires permission requests to follow a direct user action.
 - Keep the existing Roblox, RoValra API, and CDN host permissions needed by background fetches and extension resources.
 - Keep `browser_specific_settings.gecko`, the extension ID, Firefox 142 minimum, and Mozilla data-collection declaration.

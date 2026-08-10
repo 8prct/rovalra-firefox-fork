@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "RoValra - Roblox Improved (Firefox)",
-    "version": "2.6.2",
+    "version": "2.6.4.1",
     "author": "8prct (Firefox/Zen port); NotValra (original RoValra)",
     "homepage_url": "https://github.com/8prct/rovalra-firefox-fork",
     "description": "Unofficial Firefox and Zen Browser port of RoValra, maintained by 8prct.",
@@ -11,15 +11,10 @@
             "js": ["content.js"],
             "css": ["css/sitewide.css", "css/rovalra.css"],
             "run_at": "document_start",
-            "all_frames": true
+            "all_frames": false
         }
     ],
-    "permissions": [
-        "declarativeNetRequest",
-        "storage",
-        "scripting",
-        "menus"
-    ],
+    "permissions": ["declarativeNetRequest", "storage", "scripting", "menus"],
     "host_permissions": [
         "https://*.roblox.com/*",
         "https://apis.rovalra.com/*",
@@ -56,6 +51,7 @@
                 "Assets/data/serverid_extractor.js",
                 "data/*",
                 "intercept.js",
+                "swagger-ui-bundle.js",
                 "assets/*",
                 "css/*",
                 "public/Assets/permission_request.html",

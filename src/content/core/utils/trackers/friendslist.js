@@ -14,6 +14,7 @@ const FRIENDS_DATA_KEY = 'rovalra_friends_data';
 const FRIENDS_DATA_VERSION = 5;
 const FRIENDS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes for heavy data
 const ONLINE_STATUS_CACHE_DURATION = 1 * 60 * 1000; // 1 minute for online status
+const TRUSTED_FRIENDS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export function getFriendRequestOriginText(originId) {
     const fromText = ts('friendsSince.originFrom');
@@ -39,6 +40,8 @@ export function getFriendRequestOriginText(originId) {
             return `${fromText} ${ts('friendsSince.originFriendLink')}`;
         case 10: // FRIEND_RECOMMENDATIONS
             return `${fromText} ${ts('friendsSince.originPeopleYouMayKnow')}`;
+        case 11: // School memberlist
+            return `${fromText} ${ts('friendsSince.originschoolmemberlist')}`;
         default:
             return `${fromText} ${ts('friendsSince.originUnknown')}`;
     }
@@ -85,9 +88,26 @@ export async function fetchFriendsPage(userId, cursor = null) {
     }
 }
 
-export async function fetchFriendsCustom(userId, params = new URLSearchParams(), cursor = null) {
+async function fetchFriendsCount(userId) {
     try {
+        const response = await callRobloxApiJson({
+            subdomain: 'friends',
+            endpoint: `/v1/users/${userId}/friends/count`,
+            useBackground: true,
+        });
+        return typeof response?.count === 'number' ? response.count : null;
+    } catch (error) {
+        console.error('RoValra: Failed to fetch friends count', error);
+        return null;
+    }
+}
 
+export async function fetchFriendsCustom(
+    userId,
+    params = new URLSearchParams(),
+    cursor = null,
+) {
+    try {
         let endpoint = `/v1/users/${userId}/friends/find`;
         if (cursor) params.append('cursor', value);
         if (params.size > 0) endpoint += `?${params.toString()}`;
@@ -163,8 +183,9 @@ export async function updateFriendsList(userId) {
     );
 
     try {
-        const [conversations, onlineData, allTrustedFriendsSet] =
+        const [friendsCount, conversations, onlineData, allTrustedFriendsSet] =
             await Promise.all([
+                fetchFriendsCount(userId),
                 fetchAllConversations(),
                 fetchFriendsOnlineStatus(userId),
                 fetchAllTrustedFriends(userId),
@@ -215,16 +236,16 @@ export async function updateFriendsList(userId) {
                             ? false
                             : existingStatus?.canChat === true ||
                                 canChat === true
-                                ? true
-                                : null,
+                              ? true
+                              : null,
                     hasAgeChecked:
                         existingStatus?.hasAgeChecked === false ||
-                            hasAgeChecked === false
+                        hasAgeChecked === false
                             ? false
                             : existingStatus?.hasAgeChecked === true ||
                                 hasAgeChecked === true
-                                ? true
-                                : null,
+                              ? true
+                              : null,
                 });
             });
         }
@@ -305,7 +326,7 @@ export async function updateFriendsList(userId) {
                         userInsights.forEach((item) => {
                             if (
                                 item.insightCase ===
-                                INSIGHT_CASES.MUTUAL_FRIENDS &&
+                                    INSIGHT_CASES.MUTUAL_FRIENDS &&
                                 item.mutualFriendInsight
                             ) {
                                 mutualFriends = Object.keys(
@@ -314,7 +335,7 @@ export async function updateFriendsList(userId) {
                             }
                             if (
                                 item.insightCase ===
-                                INSIGHT_CASES.FRIENDSHIP_AGE &&
+                                    INSIGHT_CASES.FRIENDSHIP_AGE &&
                                 item.friendshipAgeInsight
                             ) {
                                 friendsSince =
@@ -323,7 +344,7 @@ export async function updateFriendsList(userId) {
                             }
                             if (
                                 item.insightCase ===
-                                INSIGHT_CASES.ACCOUNT_CREATION_DATE &&
+                                    INSIGHT_CASES.ACCOUNT_CREATION_DATE &&
                                 item.accountCreationDateInsight
                             ) {
                                 accountCreated =
@@ -332,7 +353,7 @@ export async function updateFriendsList(userId) {
                             }
                             if (
                                 item.insightCase ===
-                                INSIGHT_CASES.FRIEND_REQUEST_ORIGIN &&
+                                    INSIGHT_CASES.FRIEND_REQUEST_ORIGIN &&
                                 item.friendRequestOriginInsight
                             ) {
                                 friendRequestOrigin =
@@ -349,7 +370,7 @@ export async function updateFriendsList(userId) {
                         playedTogetherInsights.forEach((item) => {
                             if (
                                 item.insightCase ===
-                                INSIGHT_CASES.PLAYED_TOGETHER &&
+                                    INSIGHT_CASES.PLAYED_TOGETHER &&
                                 item.playedTogetherInsight
                             ) {
                                 const newUniverseId =
@@ -363,7 +384,7 @@ export async function updateFriendsList(userId) {
                                     mostFrequentUniverseId === null ||
                                     (newUniverseId !== null &&
                                         newUniverseId !==
-                                        mostFrequentUniverseId)
+                                            mostFrequentUniverseId)
                                 ) {
                                     mostFrequentUniverseId = newUniverseId;
                                     havePlayedTogether = newHavePlayedTogether;
@@ -420,8 +441,10 @@ export async function updateFriendsList(userId) {
         allUsersFriendsData[userId] = {
             dataVersion: FRIENDS_DATA_VERSION,
             friendsList: fullFriendsList,
+            friendsCount: friendsCount ?? fullFriendsList.length,
             lastChecked: Date.now(),
             lastOnlineChecked: Date.now(),
+            lastTrustedChecked: Date.now(),
         };
         await new Promise((resolve) =>
             chrome.storage.local.set(
@@ -435,6 +458,36 @@ export async function updateFriendsList(userId) {
         console.error('RoValra: Failed to update friends list', error);
         return [];
     }
+}
+
+async function refreshFriendsCountIfNeeded(userId, currentUserData) {
+    const friendsCount = await fetchFriendsCount(userId);
+
+    if (
+        friendsCount === null ||
+        friendsCount !== currentUserData.friendsList.length
+    ) {
+        return true;
+    }
+
+    const storageResult = await new Promise((resolve) =>
+        chrome.storage.local.get([FRIENDS_DATA_KEY], resolve),
+    );
+    const allUsersFriendsData = storageResult[FRIENDS_DATA_KEY] || {};
+    allUsersFriendsData[userId] = {
+        ...allUsersFriendsData[userId],
+        friendsCount,
+        lastChecked: Date.now(),
+    };
+
+    await new Promise((resolve) =>
+        chrome.storage.local.set(
+            { [FRIENDS_DATA_KEY]: allUsersFriendsData },
+            resolve,
+        ),
+    );
+
+    return false;
 }
 
 async function updateOnlineStatusOnly(userId, currentFriendsList) {
@@ -484,6 +537,38 @@ async function updateOnlineStatusOnly(userId, currentFriendsList) {
     }
 }
 
+async function updateTrustedFriendsOnly(userId, currentFriendsList) {
+    try {
+        const trustedIds = await fetchAllTrustedFriends(userId);
+        const updatedList = currentFriendsList.map((friend) => ({
+            ...friend,
+            isTrusted: trustedIds.has(friend.id),
+        }));
+
+        const storageResult = await new Promise((resolve) =>
+            chrome.storage.local.get([FRIENDS_DATA_KEY], resolve),
+        );
+        const allUsersFriendsData = storageResult[FRIENDS_DATA_KEY] || {};
+        allUsersFriendsData[userId] = {
+            ...allUsersFriendsData[userId],
+            friendsList: updatedList,
+            lastTrustedChecked: Date.now(),
+        };
+
+        await new Promise((resolve) =>
+            chrome.storage.local.set(
+                { [FRIENDS_DATA_KEY]: allUsersFriendsData },
+                resolve,
+            ),
+        );
+
+        return updatedList;
+    } catch (error) {
+        console.error('RoValra: Failed to update trusted friends', error);
+        return currentFriendsList;
+    }
+}
+
 export async function getFriendsList() {
     const userId = await getAuthenticatedUserId();
     if (!userId) return [];
@@ -506,11 +591,29 @@ export async function getFriendsList() {
     const needsOnlineRefresh =
         now - (currentUserData.lastOnlineChecked || 0) >
         ONLINE_STATUS_CACHE_DURATION;
+    const needsTrustedRefresh =
+        now - (currentUserData.lastTrustedChecked || 0) >
+        TRUSTED_FRIENDS_CACHE_DURATION;
 
     if (needsFullRefresh) {
-        return await updateFriendsList(userId);
-    } else if (needsOnlineRefresh) {
-        return await updateOnlineStatusOnly(
+        const friendsChanged = await refreshFriendsCountIfNeeded(
+            userId,
+            currentUserData,
+        );
+        if (friendsChanged) {
+            return await updateFriendsList(userId);
+        }
+    }
+
+    if (needsOnlineRefresh) {
+        currentUserData.friendsList = await updateOnlineStatusOnly(
+            userId,
+            currentUserData.friendsList,
+        );
+    }
+
+    if (needsTrustedRefresh) {
+        return await updateTrustedFriendsOnly(
             userId,
             currentUserData.friendsList,
         );
@@ -557,7 +660,18 @@ export function initFriendsListTracking() {
                     ONLINE_STATUS_CACHE_DURATION;
 
                 if (needsOnlineRefresh) {
-                    await updateOnlineStatusOnly(
+                    currentUserData.friendsList = await updateOnlineStatusOnly(
+                        userId,
+                        currentUserData.friendsList,
+                    );
+                }
+
+                const needsTrustedRefresh =
+                    now - (currentUserData.lastTrustedChecked || 0) >
+                    TRUSTED_FRIENDS_CACHE_DURATION;
+
+                if (needsTrustedRefresh) {
+                    await updateTrustedFriendsOnly(
                         userId,
                         currentUserData.friendsList,
                     );

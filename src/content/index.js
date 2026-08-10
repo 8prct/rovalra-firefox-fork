@@ -14,6 +14,7 @@ import { init as initVideoTest } from './features/developer/videotest.js';
 import { init as initStreamerMode } from './features/sitewide/streamermode.js';
 import { init as initMarkDownTest } from './features/developer/markdowntest.js';
 import { init as initTests } from './features/developer/tests.js';
+import { init as initApiDocs } from './features/developer/apiDocs.js';
 import { init as initModeration } from './features/moderation/moderation.js';
 import { init as initBirthdayTracker } from './core/utils/trackers/birthday.js';
 import { init as initServerTracker } from './core/utils/trackers/servers.js';
@@ -27,6 +28,7 @@ import { init as initPrivateGames } from './features/games/privateGames.js';
 import { init as initGamePassViewer } from './features/games/gamePassViewer.js';
 import { init as initQoLToggles } from './features/navigation/QoLToggles.js';
 import { init as initCopyId } from './features/sitewide/copyid.js';
+import { init as initViewIds } from './features/sitewide/viewid.js';
 import { init as initQuickSearch } from './features/navigation/search/quicksearch.js';
 import { init as initRenderTest } from './features/developer/rendertest.js';
 import { init as initGroupFunds } from './features/navigation/groupfunds.js';
@@ -43,7 +45,7 @@ import { init as initCustomRobloxBanner } from './features/sitewide/customRoblox
 import { init as initSidebarCollapse } from './features/sitewide/sidebarCollapse.js';
 import { init as initSidebarLayout } from './features/sitewide/sidebarLayout.js';
 import { init as initTopbarLayout } from './features/sitewide/topbarLayout.js';
-import { init as initFriendGameLink } from './features/sitewide/friendGameLink.js';
+import { init as initFriendUsernames } from './features/sitewide/friendUsernames.js';
 import { init as initWideTilePlayerCounts } from './features/sitewide/wideTilePlayerCounts.js';
 import { init as initPaymentMethodBonusItems } from './features/paymentmethods/bonusItems.js';
 import { init as initBackgroundImage } from './features/sitewide/backgroundImage.js';
@@ -110,6 +112,7 @@ import { init as initDraggableGroups } from './features/groups/draggableGroups.j
 import { init as initBulkLeaveGroups } from './features/groups/bulkLeave.js';
 import { init as initPlaceVisits } from './features/groups/placevisits.js';
 import { init as initGroupCreateDate } from './features/groups/createDate.js';
+import { init as initGroupPendingFunds } from './features/groups/groupPendingFunds.js';
 // Plus
 import { init as initRobloxPlusStats } from './features/plus/stats.js';
 import { init as initRobloxPlusTransferLimits } from './features/plus/transferLimits.js';
@@ -136,7 +139,6 @@ import { init as initLastPlayed } from './features/profile/header/lastplayed.js'
 import { init as initProfileViews } from './features/profile/header/profileViews.js';
 import { init as initProfilePronouns } from './features/profile/header/pronouns.js';
 import { init as initProfileNotes } from './features/profile/header/profileNotes.js';
-import { init as initCurrentlyPlayingLink } from './features/profile/header/currentlyPlayingLink.js';
 import { init as initCurrentlyPlayingSubplace } from './features/profile/header/currentlyPlayingSubplace.js';
 import { init as initIdVerificationBadge } from './features/profile/header/idVerificationBadge.js';
 import { init as initFriendsSince } from './features/profile/friends/friendsSince.js';
@@ -205,6 +207,7 @@ const featureRoutes = [
             initClientChannelTracker,
             initQoLToggles,
             initCopyId,
+            initViewIds,
             initBetaPrograms,
             initPreviousPrice,
             initQuickSearch,
@@ -231,7 +234,7 @@ const featureRoutes = [
             initSidebarCollapse,
             initSidebarLayout,
             initTopbarLayout,
-            initFriendGameLink,
+            initFriendUsernames,
             initWideTilePlayerCounts,
             initBackgroundImage,
             initFreeRobloxPlusThemes,
@@ -284,6 +287,7 @@ const featureRoutes = [
             initDraggableGroups,
             initPlaceVisits,
             initGroupCreateDate,
+            initGroupPendingFunds,
             initItemRender,
         ],
     },
@@ -368,7 +372,6 @@ const featureRoutes = [
             initProfilePronouns,
             initProfileNotes,
             initProfileViews,
-            initCurrentlyPlayingLink,
             initCurrentlyPlayingSubplace,
             initGroupRole,
             initCurrencyTransfer,
@@ -382,6 +385,10 @@ const featureRoutes = [
     {
         paths: ['/users/', '/banned-users/'],
         features: [initCategorizeWearing, initRovalraBadges, initUsernameColor],
+    },
+    {
+        paths: ['/deleted-users/'],
+        features: [initUsernameColor],
     },
 
     // Transactions page
@@ -406,8 +413,11 @@ const featureRoutes = [
         ],
     },
 
-    // ponytail: Swagger makes content.js exceed Mozilla's 5MB validator limit.
-    // Split this into a lazy extension page if Firefox needs API Docs later.
+    // API Docs
+    {
+        paths: ['/docs'],
+        features: [initApiDocs],
+    },
     // Moderation Panel
     {
         paths: ['/moderation'],
@@ -584,6 +594,8 @@ async function initializePage() {
         const featureStartTime = performance.now();
 
         await t('__i18n_ready__').catch(() => {});
+
+        await enforceSettingOverrides();
         runFeaturesForPage();
         scheduleSettingsMaintenance();
 
@@ -598,12 +610,65 @@ async function initializePage() {
         );
     };
 
+    // preload stuff
+    const builderIconsReg = document.createElement('link');
+    builderIconsReg.rel = 'preload';
+    builderIconsReg.href =
+        'https://www.rovalra.com/static/fonts/BuilderIcons-Regular.woff2';
+    builderIconsReg.as = 'font';
+    builderIconsReg.type = 'font/woff2';
+    builderIconsReg.crossOrigin = 'anonymous';
+    const builderIconsFill = document.createElement('link');
+    builderIconsFill.rel = 'preload';
+    builderIconsFill.href =
+        'https://www.rovalra.com/static/fonts/BuilderIcons-Filled.woff2';
+    builderIconsFill.as = 'font';
+    builderIconsFill.type = 'font/woff2';
+    builderIconsFill.crossOrigin = 'anonymous';
+    const rovalraIconsWOFF = document.createElement('link');
+    rovalraIconsWOFF.rel = 'preload';
+    rovalraIconsWOFF.href =
+        'https://www.rovalra.com/static/fonts/RoValraIcons.woff2';
+    rovalraIconsWOFF.as = 'font';
+    rovalraIconsWOFF.type = 'font/woff2';
+    rovalraIconsWOFF.crossOrigin = 'anonymous';
+    const googleIcons = document.createElement('link');
+    googleIcons.rel = 'preload';
+    googleIcons.href =
+        'https://fonts.googleapis.com/icon?family=Material+Icons+Outlined|Material+Icons&display=swap';
+    googleIcons.rel = 'stylesheet';
+    googleIcons.crossOrigin = 'anonymous';
+
+    if (document.head) {
+        document.head.append(
+            googleIcons,
+            rovalraIconsWOFF,
+            builderIconsReg,
+            builderIconsFill,
+        );
+    } else {
+        const docObserverForHead = new MutationObserver((_, obs) => {
+            if (document.head) {
+                obs.disconnect();
+                document.head.append(
+                    googleIcons,
+                    rovalraIconsWOFF,
+                    builderIconsReg,
+                    builderIconsFill,
+                );
+            }
+        }); //Verified
+        docObserverForHead.observe(document.documentElement, {
+            childList: true,
+        });
+    }
+
     if (document.body) {
         startFeatures().catch((error) =>
             console.error('RoValra: Feature initialization failed', error),
         );
     } else {
-        const docObserver = new MutationObserver((_, obs) => {
+        const docObserverForBody = new MutationObserver((_, obs) => {
             if (document.body) {
                 obs.disconnect();
                 startFeatures().catch((error) =>
@@ -614,7 +679,9 @@ async function initializePage() {
                 );
             }
         }); //Verified
-        docObserver.observe(document.documentElement, { childList: true });
+        docObserverForBody.observe(document.documentElement, {
+            childList: true,
+        });
     }
 }
 
@@ -630,7 +697,6 @@ async function handleUrlChange() {
 
         runFeaturesForPage();
         window.dispatchEvent(new CustomEvent('rovalra:urlChanged'));
-
     }
 }
 

@@ -18,7 +18,7 @@ let swaggerUiBundlePromise = null;
 async function getSwaggerUiBundle() {
     if (!swaggerUiBundlePromise) {
         swaggerUiBundlePromise = import(
-            'swagger-ui-dist/swagger-ui-bundle.js'
+            chrome.runtime.getURL('swagger-ui-bundle.js')
         ).then((module) => module.default || module);
     }
 

@@ -1,7 +1,7 @@
 ## RoValra Firefox / Zen port by 8prct
 
 Unofficial Firefox and [Zen Browser](https://zen-browser.app/) port of
-**RoValra 2.6.2**, maintained by [8prct](https://github.com/8prct).
+**RoValra 2.6.4.1**, maintained by [8prct](https://github.com/8prct).
 Original RoValra: [NotValra/RoValra](https://github.com/NotValra/RoValra).
 
 Build locally:
@@ -11,9 +11,10 @@ npm ci
 npm run build
 ```
 
-Load in Zen from `about:debugging#/runtime/this-firefox` using
-the generated `dist/manifest.json`, or install the packaged `.xpi` from
-`web-ext-artifacts/`.
+Load the current unsigned build in Zen from
+`about:debugging#/runtime/this-firefox` using the generated
+`dist/manifest.json`. The `.xpi` in `web-ext-artifacts/` is the packaged build
+for testing or Mozilla signing.
 
 ---
 
@@ -62,9 +63,24 @@ It helps a lot and supports continued development.
 
 ## Installation
 
-### Option 1: Chrome Web Store
+### Option 1: Firefox / Zen temporary install
 
-Install the original Chrome extension directly from the [Chrome Web Store](https://chromewebstore.google.com/detail/RoValra%20-%20Roblox%20Improved/njcickgebhnpgmoodjdgohkclfplejli). For Firefox/Zen, use this fork's XPI or build `dist/` locally.
+The current GitHub build is unsigned. In Firefox or Zen it can be loaded for
+testing until the browser restarts:
+
+1. Download or clone this repository.
+2. Run `npm ci` and `npm run build`.
+3. Open `about:debugging#/runtime/this-firefox`.
+4. Choose **Load Temporary Add-on**.
+5. Select `dist/manifest.json`.
+
+For a permanent release-channel installation, the packaged XPI must first be
+[signed by Mozilla through AMO](https://extensionworkshop.com/documentation/publish/signing-and-distribution-overview/).
+After signing, open `about:addons`, choose the settings cog, and select
+**Install Add-on From File**.
+
+Chrome users can install the original extension from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/RoValra%20-%20Roblox%20Improved/njcickgebhnpgmoodjdgohkclfplejli).
 
 > [!WARNING]
 > This Firefox/Zen port is maintained by 8prct and is not controlled by the original RoValra developers. Use it at your own risk.
@@ -79,15 +95,16 @@ Install the original Chrome extension directly from the [Chrome Web Store](https
 ### Build from source
 
 ```bash
-npm install
+npm ci
 npm run build
 ```
 
 ### Load into browser
 
-1. Enable **Developer Mode** in your browser’s extensions page
-2. Build this fork or unzip the packaged XPI from `web-ext-artifacts/`
-3. Import the folder that directly contains:
+1. Open `about:debugging#/runtime/this-firefox` in Firefox or Zen
+2. Choose **Load Temporary Add-on**
+3. Select `dist/manifest.json`
+4. The selected folder must directly contain:
     - `manifest.json`
 
 </details>

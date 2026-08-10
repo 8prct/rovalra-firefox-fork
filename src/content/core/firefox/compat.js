@@ -1,7 +1,5 @@
-// Firefox MV3 does not run background service workers and older Firefox-based
-// browsers do not consistently honor manifest-declared MAIN-world scripts.
-// Inject the page interceptor from the regular document_start content script.
-
+// Firefox MV3 uses a document background script, and this page script must run
+// in Roblox's world early enough to intercept page requests.
 export function injectFirefoxPageScripts() {
     if (window.top !== window.self) return;
     if (document.documentElement.dataset.rovalraFirefoxInjected === 'true')
