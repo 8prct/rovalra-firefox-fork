@@ -3,7 +3,11 @@ import { fetchThumbnails } from '../../core/thumbnail/thumbnails.js';
 import { loadDatacenterMap, serverIpMap } from '../../core/regions.js';
 import { callRobloxApi } from '../../core/api.js';
 import DOMPurify from 'dompurify';
-import { launchGame } from '../../core/utils/launcher.js';
+import {
+    launchGame,
+    observeGameLaunch,
+    resolveGameLaunchPlaceId,
+} from '../../core/utils/launcher.js';
 import { t, ts } from '../../core/locale/i18n.js';
 import {
     fetchServerDetails,
@@ -65,6 +69,7 @@ function openInterface(onCancel, customLogo, closeOnBackgroundClick) {
 }
 
 function closeInterface(force = false) {
+    stopLiveUptimeTicker();
     document.body.classList.remove(HIDE_ROBLOX_UI_CLASS);
     hideLoadingOverlay(force);
 }
@@ -149,41 +154,39 @@ async function fetchGameDetails(placeId) {
     }
 }
 
-function attachLiveUptimeListener() {
-    const el = document.querySelector('.rovalra-live-uptime');
-    if (el && !el._rovalraUptimeHooked) {
-        el._rovalraUptimeHooked = true;
-        el.addEventListener('rovalra-uptime-update', (e) => {
-            const valEl = el.querySelector('.uptime-value');
-            if (valEl) {
-                valEl.textContent = formatUptime(
-                    e.detail.uptime,
-                    e.detail.isEstimate,
-                );
-            }
-        });
+let liveUptimeInterval = null;
+
+function stopLiveUptimeTicker() {
+    if (liveUptimeInterval) {
+        clearInterval(liveUptimeInterval);
+        liveUptimeInterval = null;
     }
 }
 
-async function fetchUserPresence(userId) {
-    if (!userId) return null;
-    try {
-        const response = await callRobloxApi({
-            subdomain: 'presence',
-            endpoint: '/v1/presence/users',
-            method: 'POST',
-            body: { userIds: [parseInt(userId, 10)] },
-        });
-        if (!response.ok) return null;
-        const data = await response.json();
-        return (
-            data?.userPresences?.[0]?.rootPlaceId ||
-            data?.userPresences?.[0]?.placeId ||
-            null
+function attachLiveUptimeListener() {
+    stopLiveUptimeTicker();
+
+    const el = document.querySelector('.rovalra-live-uptime');
+    if (!el) return;
+
+    const serverId = el.dataset.rovalraUptimeServerid;
+    if (!serverId) return;
+
+    liveUptimeInterval = setInterval(() => {
+        if (!el.isConnected) {
+            stopLiveUptimeTicker();
+            return;
+        }
+
+        const valEl = el.querySelector('.uptime-value');
+        const uptime = getServerUptime(serverId);
+        if (!valEl || uptime === null) return;
+
+        valEl.textContent = formatUptime(
+            uptime,
+            getServerUptimeIsEstimate(serverId),
         );
-    } catch (e) {
-        return null;
-    }
+    }, 1000);
 }
 
 const buildInfoList = (
@@ -246,7 +249,7 @@ const buildInfoList = (
         const isEstimate = getServerUptimeIsEstimate(gameId);
         const uptimeStr = formatUptime(uptime, isEstimate);
         listItems.push(
-            `<li class="rovalra-details-li rovalra-live-uptime" data-rovalra-serverid="${gameId}">${timeIcon} <strong>${ts('revertLogo.uptime')}</strong> <span class="uptime-value">${uptimeStr}</span></li>`,
+            `<li class="rovalra-details-li rovalra-live-uptime" data-rovalra-uptime-serverid="${gameId}">${timeIcon} <strong>${ts('revertLogo.uptime')}</strong> <span class="uptime-value">${uptimeStr}</span></li>`,
         );
     }
 
@@ -529,7 +532,7 @@ function initializeJoinDialogEnhancer() {
             closeUiByClickingTheBackground: true,
         },
         (settings) => {
-            const processGameLaunchData = async (gameLaunchFrame) => {
+            const processGameLaunchData = async (gameLaunchFrame, launch) => {
                 gameLaunchElementExists = true;
                 const gameLaunchSrc = gameLaunchFrame?.src;
 
@@ -555,20 +558,7 @@ function initializeJoinDialogEnhancer() {
                     settings.closeUiByClickingTheBackground,
                 );
 
-                let urlParams;
-                let placeId;
-                try {
-                    const urlString = gameLaunchSrc.substring(
-                        gameLaunchSrc.indexOf('placelauncherurl:'),
-                    );
-                    const decodedUrlString = decodeURIComponent(
-                        urlString.split('+')[0].substring(17),
-                    );
-                    urlParams = new URLSearchParams(
-                        new URL(decodedUrlString).search,
-                    );
-                    placeId = urlParams.get('placeId');
-                } catch (e) {
+                if (!launch) {
                     showLoadingOverlayResult(
                         await t('revertLogo.errorParsingUrl'),
                         {
@@ -579,16 +569,18 @@ function initializeJoinDialogEnhancer() {
                     return;
                 }
 
+                const { params: urlParams } = launch;
+                let placeId = launch.placeId;
                 if (
                     !placeId &&
                     urlParams.get('request') === 'RequestFollowUser'
                 ) {
-                    const userId = urlParams.get('userId');
+                    const userId = launch.userId;
                     if (userId) {
                         updateLoadingOverlayText(
                             await t('revertLogo.findingUser'),
                         );
-                        placeId = await fetchUserPresence(userId);
+                        placeId = await resolveGameLaunchPlaceId(launch);
                     }
                 }
 
@@ -858,12 +850,7 @@ function initializeJoinDialogEnhancer() {
 
             if (!settings.whatamIJoiningEnabled) return;
 
-            observeElement('#gamelaunch', processGameLaunchData, {
-                observeAttributes: true,
-                onRemove: () => {
-                    gameLaunchElementExists = false;
-                },
-            });
+            observeGameLaunch(processGameLaunchData);
         },
     );
 }

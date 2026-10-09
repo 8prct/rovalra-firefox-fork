@@ -12,11 +12,13 @@ import * as CacheHandler from '../storage/cacheHandler.js';
 import { hasOwn } from '../utils.js';
 import { showConfirmationPrompt } from '../ui/confirmationPrompt.js';
 import { showSystemAlert } from '../ui/roblox/alert.js';
+import { ts } from '../locale/i18n.js';
 import { requestTouAgreement } from '../ui/tou/touAgreement.js';
-import { dispatchPageEvent } from '../firefox/compat.js';
 import {
     normalizeProfilePronouns,
     replacePronounSpecialCharacters,
+    getProfilePronounsForUser,
+    setProfilePronounsForUser,
     truncateProfilePronouns,
 } from '../profile/pronouns.js';
 import {
@@ -29,6 +31,7 @@ import {
 import { sanitizeBackgroundImage } from '../backgroundImage.js';
 import './settingsCompat';
 
+let currentUserTierLoaded = false;
 let currentUserTier = 0;
 let gradientSyncTimeout = null;
 let gradientNameSyncTimeout = null;
@@ -74,14 +77,8 @@ function consumeProfilePronounsInputAgreement() {
 
 async function prepareProfilePronounsUpdate(value) {
     const normalizedValue = normalizeProfilePronouns(value);
-    const stored = await chrome.storage.local.get([
-        PROFILE_PRONOUNS_SETTING_NAME,
-        'rovalra_settings',
-    ]);
-    const previousValue = normalizeProfilePronouns(
-        stored[PROFILE_PRONOUNS_SETTING_NAME] ??
-            stored.rovalra_settings?.[PROFILE_PRONOUNS_SETTING_NAME],
-    );
+    const authenticatedUserId = await getAuthenticatedUserId();
+    const previousValue = await getProfilePronounsForUser(authenticatedUserId);
 
     const changed = normalizedValue !== previousValue;
 
@@ -111,8 +108,8 @@ async function prepareProfilePronounsUpdate(value) {
                 restoreProfilePronounsInput(previousValue);
                 showSystemAlert(
                     validationStatus === 'toolong'
-                        ? 'Pronouns must be 15 characters or fewer.'
-                        : "Roblox's filter rejected these pronouns. Try a different value.",
+                        ? ts('settings.ui.pronouns.tooLong')
+                        : ts('settings.ui.pronouns.filterRejected'),
                     'warning',
                 );
                 return { shouldSave: false };
@@ -120,13 +117,11 @@ async function prepareProfilePronounsUpdate(value) {
         } catch (error) {
             restoreProfilePronounsInput(previousValue);
             let validationErrorMessage =
-                'Pronouns could not be checked by Roblox. Please try again.';
+                ts('settings.ui.pronouns.checkFailed');
             if (error?.status === 400) {
-                validationErrorMessage =
-                    "Roblox's filter rejected these pronouns. Try a different value.";
+                validationErrorMessage = ts('settings.ui.pronouns.filterRejected');
             } else if (error?.status === 429) {
-                validationErrorMessage =
-                    'The Roblox pronoun filter is busy. Please try again shortly.';
+                validationErrorMessage = ts('settings.ui.pronouns.filterBusy');
             }
             showSystemAlert(validationErrorMessage, 'warning');
             return { shouldSave: false };
@@ -162,6 +157,7 @@ async function prepareProfilePronounsUpdate(value) {
         value: normalizedValue,
         changed,
         syncFailed: !apiSynced,
+        userId: authenticatedUserId,
     };
 }
 
@@ -177,9 +173,9 @@ const isStatusLabeledOffByDefaultSetting = (config) =>
 
 const getFeatureStatusPromptPills = () =>
     [
-        '<span class="rovalra-pill experimental">Experimental</span>',
-        '<span class="rovalra-pill beta">Beta</span>',
-        '<span class="rovalra-pill deprecated">Deprecated</span>',
+        `<span class="rovalra-pill experimental">${ts('settings.ui.controls.experimental')}</span>`,
+        `<span class="rovalra-pill beta">${ts('settings.ui.controls.beta')}</span>`,
+        `<span class="rovalra-pill deprecated">${ts('settings.ui.controls.deprecated')}</span>`,
     ].join('');
 
 const shouldShowFeatureStatusPrompt = async (config) => {
@@ -265,10 +261,20 @@ function queueGradientNameSync(settingsOverride = {}) {
         );
     }, 750);
 }
+/**
+    @description Tier may not be always initalized either use getCurrentUserTier (async func) or call syncDonatorTier first.
+*/
+export const getCurrentUserTierSync = () => currentUserTier;
 
-export const getCurrentUserTier = () => currentUserTier;
+/**
+ * @description get User Tier but calls syncDonatorTier if not initalized
+ */
+export const getCurrentUserTier = async () => {
+    if (!currentUserTierLoaded) await syncDonatorTier();
+    return currentUserTier;
+};
 
-export const syncDonatorTier = async () => {
+export const syncDonatorTier = async ({ force = false } = {}) => {
     if (donatorTierPromise) return donatorTierPromise;
 
     const now = Date.now();
@@ -300,8 +306,6 @@ export const syncDonatorTier = async () => {
         userId: null,
     };
 
-    state.cachedResponse = null;
-
     if (state.userId !== currentUserId) {
         state.lastSync = 0;
         state.cachedResponse = null;
@@ -324,8 +328,14 @@ export const syncDonatorTier = async () => {
         state.priorityActive && isUrlChange && state.checksLeft > 0;
     const isExpired = now - state.lastSync > 5 * 60 * 1000;
 
-    if (inMemoryDonatorResponse && !isPriorityCheck && !isExpired) {
-        return inMemoryDonatorResponse;
+    if (!force && !isPriorityCheck && !isExpired) {
+        const cachedResponse =
+            inMemoryDonatorResponse || state.cachedResponse || null;
+        if (cachedResponse) {
+            inMemoryDonatorResponse = cachedResponse;
+            currentUserTierLoaded = true;
+            return cachedResponse;
+        }
     }
 
     donatorTierPromise = (async () => {
@@ -369,7 +379,7 @@ export const syncDonatorTier = async () => {
             state.lastPath = currentPath;
             inMemoryDonatorResponse = response;
             state.userId = currentUserId;
-            state.cachedResponse = null;
+            state.cachedResponse = response;
 
             await CacheHandler.set(
                 'donator_info',
@@ -385,6 +395,8 @@ export const syncDonatorTier = async () => {
                 const settings = await loadSettings();
                 await checkSettingLocks(settingsContent, settings);
             }
+
+            currentUserTierLoaded = true;
 
             return response;
         } catch (error) {
@@ -436,7 +448,7 @@ export const loadSettings = async () => {
 
         chrome.storage.local.get(
             { ...defaultSettings, [REMOTE_SETTING_LOCKS_KEY]: {} },
-            (settings) => {
+            async (settings) => {
                 if (chrome.runtime.lastError) {
                     console.error(
                         'Failed to load settings:',
@@ -457,6 +469,10 @@ export const loadSettings = async () => {
                     for (const [key, value] of Object.entries(forcedSettings)) {
                         settings[key] = value;
                     }
+
+                    const authenticatedUserId = await getAuthenticatedUserId();
+                    settings[PROFILE_PRONOUNS_SETTING_NAME] =
+                        await getProfilePronounsForUser(authenticatedUserId);
                     resolve(settings);
                 }
             },
@@ -505,12 +521,12 @@ export const enforceSettingOverrides = async () => {
                 category.settings,
             )) {
                 const processSetting = (name, conf) => {
-                    if (conf.donatorTier) {
+                    /*if (conf.donatorTier) {
                         const isLocked = userTier < conf.donatorTier;
                         if (isLocked && settings[name] === true) {
                             overrides[name] = false;
                         }
-                    }
+                        }*/ // Broken as it would always turn checkboxes off
                     if (
                         (conf.locked || conf.deprecated) &&
                         getStoredSetting(name) === true
@@ -603,6 +619,7 @@ export const handleSaveSettings = async (settingName, value) => {
         let sanitizedValue = value;
         let profilePronounsChanged = false;
         let profilePronounsSyncFailed = false;
+        let profilePronounsUserId = null;
 
         if (settingConfig) {
             switch (settingConfig.type) {
@@ -654,7 +671,7 @@ export const handleSaveSettings = async (settingName, value) => {
                             if (normalizedUrl === INVALID_HTTP_URL) {
                                 await restoreTextSettingInput(settingName);
                                 showSystemAlert(
-                                    'Enter a valid http:// or https:// image URL.',
+                                    ts('settings.ui.controls.invalidImageUrl'),
                                     'warning',
                                 );
                                 return;
@@ -822,6 +839,7 @@ export const handleSaveSettings = async (settingName, value) => {
             sanitizedValue = pronounsUpdate.value;
             profilePronounsChanged = pronounsUpdate.changed;
             profilePronounsSyncFailed = pronounsUpdate.syncFailed;
+            profilePronounsUserId = pronounsUpdate.userId;
         }
 
         const settings = { [settingName]: sanitizedValue };
@@ -836,6 +854,17 @@ export const handleSaveSettings = async (settingName, value) => {
                     );
                     reject(chrome.runtime.lastError);
                 } else {
+                    if (settingName === PROFILE_PRONOUNS_SETTING_NAME) {
+                        setProfilePronounsForUser(
+                            profilePronounsUserId,
+                            sanitizedValue,
+                        ).catch((error) =>
+                            console.warn(
+                                'RoValra: Failed to save account-scoped pronouns.',
+                                error,
+                            ),
+                        );
+                    }
                     syncToSettingsKey(settingName, sanitizedValue);
                     if (
                         settingName === REMOTE_SETTING_OVERRIDE_KEY &&
@@ -916,10 +945,14 @@ export const handleSaveSettings = async (settingName, value) => {
                             );
                     }
 
-                    dispatchPageEvent('rovalra:settingSaved', {
-                        name: settingName,
-                        value: sanitizedValue,
-                    });
+                    document.dispatchEvent(
+                        new CustomEvent('rovalra:settingSaved', {
+                            detail: {
+                                name: settingName,
+                                value: sanitizedValue,
+                            },
+                        }),
+                    );
 
                     if (profilePronounsChanged || profilePronounsSyncFailed) {
                         showSystemAlert(
@@ -1176,7 +1209,9 @@ export const initSettings = async (settingsContent) => {
                                                 );
                                             option.value = regionCode;
                                             option.textContent =
-                                                getFullRegionName(regionCode);
+                                                regionCode === 'AUTO'
+                                                    ? ts('regionSelector.automatic')
+                                                    : getFullRegionName(regionCode);
                                             childElement.appendChild(option);
                                         },
                                     );
@@ -1316,10 +1351,12 @@ export const applyLockedState = (
         if (isDonatorLock) {
             const tier = config?.donatorTier || '';
             statusLine.textContent = isLocked
-                ? `RoValra Donator Tier ${tier} Required`
-                : `RoValra Donator Perk (Tier ${tier})`;
+                ? ts('settings.ui.locks.donatorTierRequired', { tier })
+                : ts('settings.ui.locks.donatorPerk', { tier });
         } else {
-            statusLine.textContent = `This feature has been disabled ${lockType}`;
+            statusLine.textContent = ts('settings.ui.locks.featureDisabled', {
+                lockType,
+            });
         }
 
         const reasonLine = document.createElement('div');
@@ -1555,7 +1592,15 @@ export function updateConditionalSettingsVisibility(
                         currentSettings[childConfig.condition.parent] !==
                         childConfig.condition.value
                     ) {
-                        settingsToHide.add(childName);
+                        if (childConfig.condition.hide !== false) {
+                            settingsToHide.add(childName);
+                        }
+                        settingsToDisable.add(childName);
+                    } else if (
+                        config.type === 'checkbox' &&
+                        !config.keepChildSettingsEnabled &&
+                        !isEnabled
+                    ) {
                         settingsToDisable.add(childName);
                     }
                 } else if (
@@ -1772,6 +1817,11 @@ export function initializeSettingsEventListeners() {
             'https://www.roblox.com/my/account?rovalra=store';
     });
 
+    document.addEventListener('rovalra:openFrameStore', () => {
+        window.location.href =
+            'https://www.roblox.com/my/account?rovalra=store&tab=frames';
+    });
+
     document.addEventListener('rovalra:generateEnvironmentJson', async () => {
         const settings = await loadSettings();
         const envConfig = {};
@@ -1875,7 +1925,7 @@ export function initializeSettingsEventListeners() {
             'Generated Environment JSON:\n' +
                 JSON.stringify(envConfig, null, 2),
         );
-        alert('Environment JSON has been printed to the console (F12).');
+        alert(ts('settings.ui.environment.exported'));
     });
 
     document.addEventListener('rovalra:importEnvironmentJson', () => {
@@ -2005,7 +2055,7 @@ export function initializeSettingsEventListeners() {
                     await Promise.all(promises);
 
                     alert(
-                        'Environment config imported successfully. The page will reload to apply changes.',
+                        ts('settings.ui.environment.imported'),
                     );
                     location.reload();
                 } catch (error) {
@@ -2013,7 +2063,7 @@ export function initializeSettingsEventListeners() {
                         'Failed to import environment config:',
                         error,
                     );
-                    alert('Failed to parse the JSON file.');
+                    alert(ts('settings.ui.environment.parseFailed'));
                 }
             };
             reader.readAsText(file);
@@ -2032,7 +2082,9 @@ export function initializeSettingsEventListeners() {
                     totalBytes += itemSize;
                 }
             }
-            alert(`Total Local Storage Used: ${formatBytes(totalBytes)}`);
+            alert(ts('settings.ui.environment.storageUsed', {
+                size: formatBytes(totalBytes),
+            }));
         });
     });
 
@@ -2083,10 +2135,9 @@ export function initializeSettingsEventListeners() {
 
         if (target.matches('input[type="checkbox"]')) {
             value = target.checked;
+            const settingConfig = findSettingConfig(settingName);
 
             if (value) {
-                const settingConfig = findSettingConfig(settingName);
-
                 if (
                     target.dataset.featureStatusPromptAccepted !== 'true' &&
                     (await shouldShowFeatureStatusPrompt(settingConfig))
@@ -2094,12 +2145,12 @@ export function initializeSettingsEventListeners() {
                     target.checked = false;
                     const statusPills = getFeatureStatusPromptPills();
                     showConfirmationPrompt({
-                        title: 'Before Enabling This Feature',
+                        title: ts('settings.ui.featureStatus.title'),
                         message:
                             `<span style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;">${statusPills}</span>` +
-                            'Features with these labels might be unstable, or may change over time. They can cause longer load times, inconsistent UI, site-related issues, or other unexpected behavior.<br><br>Only enable this if you understand that it may not work perfectly.',
-                        confirmText: 'I Acknowledge',
-                        cancelText: 'Cancel',
+                            ts('settings.ui.featureStatus.message'),
+                        confirmText: ts('settings.ui.featureStatus.acknowledge'),
+                        cancelText: ts('common.cancel'),
                         confirmType: 'primary',
                         cancelType: 'secondary',
                         onConfirm: async () => {
@@ -2162,11 +2213,47 @@ export function initializeSettingsEventListeners() {
                         },
                     );
                 }
+
+                if (settingConfig?.dependsOn) {
+                    settingConfig.dependsOn.forEach((dependedSettingName) => {
+                        if (findSettingConfig(dependedSettingName) != null) {
+                            const dependedElement = document.querySelector(
+                                `#${dependedSettingName}`,
+                            );
+                            if (dependedElement?.checked === false) {
+                                dependedElement.checked = true;
+                            }
+                            savePromises.push(
+                                handleSaveSettings(dependedSettingName, true),
+                            );
+                        }
+                    });
+                }
+            } else {
+                if (settingConfig?.dependedBy) {
+                    settingConfig.dependedBy.forEach((dependedSettingName) => {
+                        if (findSettingConfig(dependedSettingName) != null) {
+                            const dependedElement = document.querySelector(
+                                `#${dependedSettingName}`,
+                            );
+                            if (dependedElement?.checked) {
+                                dependedElement.checked = false;
+                            }
+                            savePromises.push(
+                                handleSaveSettings(dependedSettingName, false),
+                            );
+                        }
+                    });
+                }
             }
 
             savePromises.push(handleSaveSettings(settingName, value));
         } else if (target.matches('select')) {
             value = target.value;
+            const previousLanguage =
+                settingName === 'rovalraLanguage'
+                    ? (await loadSettings()).rovalraLanguage
+                    : null;
             savePromises.push(handleSaveSettings(settingName, value));
             if (settingName === 'profileRenderEnvironment') {
                 const profileEnvs =
@@ -2189,6 +2276,14 @@ export function initializeSettingsEventListeners() {
                     );
                 }
             }
+            if (
+                settingName === 'rovalraLanguage' &&
+                value !== previousLanguage
+            ) {
+                await Promise.all(savePromises);
+                location.reload();
+                return;
+            }
         } else if (
             target.matches(
                 'input[type="text"], input[type="url"], input:not([type])',
@@ -2200,6 +2295,10 @@ export function initializeSettingsEventListeners() {
             const min = parseFloat(target.min) || 0;
             const max = parseFloat(target.max) || Infinity;
             value = Math.max(min, Math.min(max, parseFloat(target.value) || 0));
+            target.value = String(value);
+            if (findSettingConfig(settingName)?.type === 'input') {
+                value = String(value);
+            }
 
             const toggleElement = document.querySelector(
                 `[data-controls-setting="${settingName}"]`,

@@ -1,3 +1,27 @@
+const AccessoryAssetTypes = [
+    8,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+];
+
+const LayeredAssetTypes = [
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    41,
+];
+
 (function () {
     'use strict';
 
@@ -14,6 +38,7 @@
         'https://metrics.roblox.com/v1/games/report-event';
     const GAME_SERVERS_API_URL = 'https://games.roblox.com/';
     const GAMES_ROBLOX_API = 'https://games.roblox.com/';
+    const PRIVATE_SERVER_CREATE_PATH = '/v1/games/vip-servers/';
     const TRADES_API_URL = 'https://trades.roblox.com/v2/users/';
     const TRADE_DETAILS_API_URL = 'https://trades.roblox.com/v2/trades/';
     const TRADES_LIST_API_URL = 'https://trades.roblox.com/v1/trades/';
@@ -31,6 +56,11 @@
         'https://apis.roblox.com/discovery-api/omni-recommendation';
     const FRIEND_CAROUSEL_TOPIC_ID = 600000000;
     const FRIEND_CAROUSEL_TREATMENT_TYPE = 'FriendCarousel';
+    const THUMBNAILS_API_HOST = 'thumbnails.roblox.com';
+    const THUMBNAIL_BACKGROUND_SETTING = 'disableThumbnailBackground';
+    const THUMBNAIL_PROFILE_FRAME_SETTING = 'disableThumbnailProfileFrame';
+    const GAME_SERVERS_REQUEST_PATH =
+        /^\/v[12]\/games\/\d+\/(?:servers\/(?:Public|Friend)|private-servers)\/?$/;
 
     let ASSET_TYPE_ACCESSORIES = [8, 41, 42, 43, 44, 45, 46, 47, 57, 58];
     let ASSET_TYPE_LAYERED = [64, 65, 66, 67, 68, 69, 70, 71, 72];
@@ -42,11 +72,135 @@
     let homeLayoutOrder = [];
     let homeLayoutHidden = [];
     let homeExtraSorts = [];
+    const homeExtraSortSources = new Map();
+    const homeExtraSortKeys = new Set();
+    let homeKnownSorts = [];
     let homeLayoutReady = false;
     let homeLayoutReadyPromise = null;
     let resolveHomeLayoutReady = null;
     let robloxGroupFeaturesEnabled = true;
     let freeRobloxPlusThemesEnabled = false;
+    let disableThumbnailBackground = false;
+    let disableThumbnailProfileFrame = false;
+
+    function updateThumbnailBackgroundSetting(value) {
+        disableThumbnailBackground = value === true;
+    }
+
+    function updateThumbnailProfileFrameSetting(value) {
+        disableThumbnailProfileFrame = value === true;
+    }
+
+    function isThumbnailsApiRequest(url) {
+        try {
+            return new URL(url, window.location.origin).hostname ===
+                THUMBNAILS_API_HOST;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function rewriteThumbnailRequestBody(body) {
+        if (typeof body !== 'string' || !body) return body;
+
+        try {
+            const data = JSON.parse(body);
+            if (!data || typeof data !== 'object') {
+                return body;
+            }
+
+            if (Array.isArray(data)) {
+                data.forEach((request) => {
+                    if (request && typeof request === 'object') {
+                        if (disableThumbnailBackground) {
+                            request.includeBackground = false;
+                        }
+                        if (disableThumbnailProfileFrame) {
+                            request.includeProfileFrame = false;
+                        }
+                    }
+                });
+            } else {
+                if (disableThumbnailBackground) data.includeBackground = false;
+                if (disableThumbnailProfileFrame) {
+                    data.includeProfileFrame = false;
+                }
+            }
+
+            return JSON.stringify(data);
+        } catch (e) {
+            return body;
+        }
+    }
+
+    function rewriteThumbnailRequestUrl(url) {
+        if (
+            (!disableThumbnailBackground && !disableThumbnailProfileFrame) ||
+            !isThumbnailsApiRequest(url)
+        ) {
+            return url;
+        }
+
+        try {
+            const rewrittenUrl = new URL(url, window.location.origin);
+            if (disableThumbnailBackground) {
+                rewrittenUrl.searchParams.set('includeBackground', 'false');
+            }
+            if (disableThumbnailProfileFrame) {
+                rewrittenUrl.searchParams.set('includeProfileFrame', 'false');
+            }
+            return rewrittenUrl.toString();
+        } catch (e) {
+            return url;
+        }
+    }
+
+    async function rewriteThumbnailFetchArgs(args, requestUrl) {
+        if (
+            (!disableThumbnailBackground && !disableThumbnailProfileFrame) ||
+            !isThumbnailsApiRequest(requestUrl)
+        ) {
+            return args;
+        }
+
+        const [input, init] = args;
+        const rewrittenUrl = rewriteThumbnailRequestUrl(requestUrl);
+        if (init?.body !== undefined) {
+            return [
+                rewrittenUrl,
+                { ...init, body: rewriteThumbnailRequestBody(init.body) },
+            ];
+        }
+
+        if (!(input instanceof Request)) return args;
+
+        try {
+            const body = await input.clone().text();
+            const rewrittenBody = rewriteThumbnailRequestBody(body);
+            if (rewrittenUrl === requestUrl && rewrittenBody === body) {
+                return args;
+            }
+
+            return [
+                new Request(rewrittenUrl, {
+                    method: input.method,
+                    headers: input.headers,
+                    body: rewrittenBody || undefined,
+                    credentials: input.credentials,
+                    mode: input.mode,
+                    cache: input.cache,
+                    redirect: input.redirect,
+                    referrer: input.referrer,
+                    referrerPolicy: input.referrerPolicy,
+                    integrity: input.integrity,
+                    keepalive: input.keepalive,
+                }),
+                init,
+            ];
+        } catch (e) {
+            return args;
+        }
+    }
 
     try {
         freeRobloxPlusThemesEnabled =
@@ -58,10 +212,33 @@
             robloxGroupFeaturesEnabled = event.detail.value !== false;
         }
     });
+    document.addEventListener('rovalra:settingSaved', (event) => {
+        if (event.detail?.name === THUMBNAIL_BACKGROUND_SETTING) {
+            updateThumbnailBackgroundSetting(event.detail.value);
+        }
+        if (event.detail?.name === THUMBNAIL_PROFILE_FRAME_SETTING) {
+            updateThumbnailProfileFrameSetting(event.detail.value);
+        }
+    });
     document.addEventListener('rovalra:settingsState', (event) => {
         if (typeof event.detail?.robloxGroupFeaturesEnabled === 'boolean') {
             robloxGroupFeaturesEnabled =
                 event.detail.robloxGroupFeaturesEnabled;
+        }
+        if (
+            typeof event.detail?.[THUMBNAIL_BACKGROUND_SETTING] ===
+            'boolean'
+        ) {
+            updateThumbnailBackgroundSetting(
+                event.detail[THUMBNAIL_BACKGROUND_SETTING],
+            );
+        }
+        if (
+            typeof event.detail?.[THUMBNAIL_PROFILE_FRAME_SETTING] === 'boolean'
+        ) {
+            updateThumbnailProfileFrameSetting(
+                event.detail[THUMBNAIL_PROFILE_FRAME_SETTING],
+            );
         }
     });
     document.addEventListener('rovalra:settingSaved', (event) => {
@@ -132,8 +309,72 @@
     });
 
     document.addEventListener('rovalra-home-extra-sorts', (e) => {
-        homeExtraSorts = Array.isArray(e.detail?.sorts) ? e.detail.sorts : [];
+        homeExtraSortSources.set(
+            e.detail?.source || 'legacy',
+            Array.isArray(e.detail?.sorts) ? e.detail.sorts : [],
+        );
+        homeExtraSorts = [...homeExtraSortSources.values()].flat();
+        homeExtraSortKeys.clear();
+        homeExtraSorts.forEach((sort) =>
+            homeExtraSortKeys.add(getHomeSortKey(sort)),
+        );
+        refreshHomeExtraSorts();
     });
+
+    document.addEventListener('rovalra-home-rendered', refreshHomeExtraSorts);
+
+    function refreshHomeExtraSorts() {
+        const card = document.querySelector('#HomeContainer a.game-card-link');
+        if (!card) return;
+        const fiberKey = Object.keys(card).find((key) =>
+            key.startsWith('__reactFiber$'),
+        );
+        for (let fiber = card[fiberKey]; fiber; fiber = fiber.return) {
+            for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+                if (
+                    hook.memoizedState?.pageType !== 'Home' ||
+                    !Array.isArray(hook.memoizedState.sorts) ||
+                    typeof hook.queue?.dispatch !== 'function'
+                )
+                    continue;
+                hook.queue.dispatch((current) => {
+                    if (
+                        current?.pageType !== 'Home' ||
+                        !Array.isArray(current.sorts)
+                    )
+                        return current;
+                    const data = {
+                        ...current,
+                        sorts: current.sorts.filter(
+                            (sort) =>
+                                !homeExtraSortKeys.has(getHomeSortKey(sort)),
+                        ),
+                        games: [...(current.games || [])],
+                        contentMetadata: {
+                            ...current.contentMetadata,
+                            Game: { ...current.contentMetadata?.Game },
+                        },
+                    };
+                    const currentKeys = new Set(data.sorts.map(getHomeSortKey));
+                    for (const sort of homeKnownSorts) {
+                        const key = getHomeSortKey(sort);
+                        if (
+                            homeLayoutHidden.includes(key) &&
+                            !currentKeys.has(key) &&
+                            !homeExtraSortKeys.has(key)
+                        )
+                            data.sorts.push(sort);
+                    }
+                    addHomeExtraSorts(data);
+                    reorderHomeSorts(data);
+                    dispatchHomeLayoutCategories(data);
+                    hideHomeSorts(data);
+                    return data;
+                });
+                return;
+            }
+        }
+    }
 
     function waitForHomeLayoutState() {
         if (homeLayoutReady) return Promise.resolve();
@@ -155,6 +396,80 @@
         if (typeof url === 'string') return url;
         if (url instanceof Request) return url.url;
         return '';
+    }
+
+    function getGameIdFromPageUrl() {
+        try {
+            const pageUrl = new URL(window.location.href);
+            const queryPlaceId = pageUrl.searchParams.get('PlaceId');
+            if (queryPlaceId) return queryPlaceId;
+
+            const match = pageUrl.pathname.match(
+                /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/(?:games|catalog|bundles|hidden-catalog|looks|library|game-pass|private-games)\/(\d+)/i,
+            );
+            if (match && match[1]) return match[1];
+        } catch (e) {}
+
+        const match = window.location.href.match(
+            /\/(?:games|catalog|bundles|hidden-catalog|looks|library|game-pass|private-games)\/(\d+)/,
+        );
+        return match ? match[1] : null;
+    }
+    function rewriteGameServersRequestUrl(url) {
+        if (typeof url !== 'string') return url;
+
+        try {
+            const requestUrl = new URL(url, window.location.origin);
+            if (
+                requestUrl.hostname !== 'games.roblox.com' ||
+                !GAME_SERVERS_REQUEST_PATH.test(requestUrl.pathname)
+            ) {
+                return url;
+            }
+
+            const gameId = getGameIdFromPageUrl();
+            if (!gameId) return url;
+
+            const pathParts = requestUrl.pathname.split('/');
+            pathParts[3] = gameId;
+            requestUrl.pathname = pathParts.join('/');
+            return requestUrl.toString();
+        } catch (e) {
+            return url;
+        }
+    }
+
+    async function rewriteGameServersFetchArgs(args, requestUrl) {
+        const rewrittenUrl = rewriteGameServersRequestUrl(requestUrl);
+        if (rewrittenUrl === requestUrl) return args;
+
+        const [input, init] = args;
+        if (!(input instanceof Request)) {
+            return [rewrittenUrl, init];
+        }
+
+        try {
+            return [
+                new Request(rewrittenUrl, {
+                    method: input.method,
+                    headers: input.headers,
+                    body: input.method === 'GET' || input.method === 'HEAD'
+                        ? undefined
+                        : await input.clone().arrayBuffer(),
+                    credentials: input.credentials,
+                    mode: input.mode,
+                    cache: input.cache,
+                    redirect: input.redirect,
+                    referrer: input.referrer,
+                    referrerPolicy: input.referrerPolicy,
+                    integrity: input.integrity,
+                    keepalive: input.keepalive,
+                }),
+                init,
+            ];
+        } catch (e) {
+            return args;
+        }
     }
 
     function isRobloxAdminGroupMember(data) {
@@ -328,12 +643,14 @@
     }
 
     function canAdjustHomeSort(sort) {
+        if (sort?.rovalraKeepEmpty) return true;
         const gameCount = getHomeSortGameCount(sort);
         return gameCount === null || gameCount > 0;
     }
 
     function dispatchHomeLayoutCategories(data) {
         if (data?.pageType !== 'Home' || !Array.isArray(data.sorts)) return;
+        homeKnownSorts = data.sorts;
 
         const seenKeys = new Set();
         const categories = data.sorts
@@ -600,10 +917,14 @@
         }
     }
 
-    const originalFetch = window.fetch.bind(window);
+    const originalFetch = window.fetch;
     window.fetch = async function (...args) {
         const [url] = args;
-        const requestUrl = getRequestUrl(url);
+        const originalRequestUrl = getRequestUrl(url);
+        const requestUrl = rewriteGameServersRequestUrl(originalRequestUrl);
+
+        args = await rewriteGameServersFetchArgs(args, originalRequestUrl);
+        args = await rewriteThumbnailFetchArgs(args, requestUrl);
 
         let response = await originalFetch(...args);
 
@@ -797,6 +1118,24 @@
                     .catch(() => {});
             }
             if (
+                requestUrl.includes(GAMES_ROBLOX_API) &&
+                requestUrl.includes(PRIVATE_SERVER_CREATE_PATH) &&
+                String(args[1]?.method || args[0]?.method).toUpperCase() ===
+                    'POST'
+            ) {
+                response
+                    .clone()
+                    .json()
+                    .then((d) =>
+                        document.dispatchEvent(
+                            new CustomEvent('rovalra-private-server-created', {
+                                detail: d,
+                            }),
+                        ),
+                    )
+                    .catch(() => {});
+            }
+            if (
                 requestUrl.includes(TRADES_API_URL) &&
                 requestUrl.includes('/tradableitems')
             ) {
@@ -854,6 +1193,15 @@
     const originalXhrSend = XMLHttpRequest.prototype.send;
 
     XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+        if (typeof url === 'string') {
+            url = rewriteGameServersRequestUrl(url);
+        }
+        if (
+            typeof url === 'string' &&
+            (disableThumbnailBackground || disableThumbnailProfileFrame)
+        ) {
+            url = rewriteThumbnailRequestUrl(url);
+        }
         this._rovalra_url = url;
         this._rovalra_method = method;
 
@@ -894,6 +1242,12 @@
 
     XMLHttpRequest.prototype.send = function (...args) {
         const xhr = this;
+        if (
+            (disableThumbnailBackground || disableThumbnailProfileFrame) &&
+            isThumbnailsApiRequest(xhr._rovalra_url)
+        ) {
+            args[0] = rewriteThumbnailRequestBody(args[0]);
+        }
         if (
             xhr._rovalra_spoof_settings ||
             xhr._rovalra_spoof_phone ||
@@ -1058,6 +1412,15 @@
                             JSON.parse(xhr.responseText),
                         );
                     if (
+                        url.includes(GAMES_ROBLOX_API) &&
+                        url.includes(PRIVATE_SERVER_CREATE_PATH) &&
+                        String(xhr._rovalra_method).toUpperCase() === 'POST'
+                    )
+                        triggerEvent(
+                            'rovalra-private-server-created',
+                            JSON.parse(xhr.responseText),
+                        );
+                    if (
                         url.includes(TRADES_API_URL) &&
                         url.includes('/tradableitems')
                     )
@@ -1107,6 +1470,7 @@
     document.addEventListener('rovalra-multi-equip', (e) => {
         if (e.detail) {
             if (typeof e.detail.enabled === 'boolean') {
+                window.rovalraMultiEquipEnabled = e.detail.enabled;
                 multiAccessoryEnabled = e.detail.enabled;
             }
             if (Array.isArray(e.detail.accessories)) {
@@ -1227,6 +1591,85 @@
                     }
                 },
             });
+        }
+
+        const customEquipAsset = (...args) => {
+            const [assetToAdd, assetArr] = args
+            let accessoryCount = 0
+            let layeredCount = 0
+
+            const assetToAddIsAccessory = AccessoryAssetTypes.includes(assetToAdd.assetType.id)
+            const assetToAddIsLayered = LayeredAssetTypes.includes(assetToAdd.assetType.id)
+
+            const newAssetArr = []
+
+            for (const asset of assetArr.toReversed()) {
+                let canAdd = true
+
+                //enforce accessory limit (10)
+                if (AccessoryAssetTypes.includes(asset.assetType.id)) {
+                    accessoryCount++
+                    if (accessoryCount >= 10 && assetToAddIsAccessory) canAdd = false
+                }
+
+                //enforce layered limit (10, also includes hair)
+                if (LayeredAssetTypes.includes(asset.assetType.id)) {
+                    layeredCount++
+                    if (layeredCount >= 10 && assetToAddIsLayered) canAdd = false
+                }
+
+                //enforce limit of items you can only equip one of (although this never happens because then we dont hijack)
+                if (!assetToAddIsAccessory && !assetToAddIsLayered && assetToAdd.assetType.id === asset.assetType.id) {
+                    canAdd = false
+                }
+
+                if (canAdd) newAssetArr.push(asset)
+            }
+
+            newAssetArr.reverse()
+            newAssetArr.push(assetToAdd)
+
+            return newAssetArr
+        }
+
+        const originalDefineProperty = Object.defineProperty
+        Object.defineProperty = function(obj, prop, descriptor) {
+            //find modules
+            if (prop === "__esModule") {
+                setTimeout(() => {
+                    //if module includes addAssetToAvatar
+                    if (Object.keys(obj).includes("addAssetToAvatar")) {
+                        const originalDescriptor = Object.getOwnPropertyDescriptor(obj, "addAssetToAvatar")
+                        const originalGetter = originalDescriptor.get
+                        const originalAddAssetToAvatar = originalGetter()
+
+                        //hijack addAssetToAvatar when needed
+                        Object.defineProperty(obj, "addAssetToAvatar", {
+                            get() {
+                                return (...args) => {
+                                    const [asset] = args
+
+                                    const isAccessory = AccessoryAssetTypes.includes(asset.assetType.id)
+                                    const isLayered = LayeredAssetTypes.includes(asset.assetType.id)
+                                    const needsHijack = isAccessory || isLayered
+
+                                    if (window.rovalraMultiEquipEnabled && needsHijack) {
+                                        return customEquipAsset(...args)
+                                    } else {
+                                        return originalAddAssetToAvatar(...args)
+                                    }
+                                }
+                            },
+                            configurable: true,
+                        })
+                    }
+                }, 1)
+            }
+            if (prop === "addAssetToAvatar") {
+                descriptor.configurable = true
+            }
+
+            return originalDefineProperty.call(Object, obj, prop, descriptor)
         }
     };
 

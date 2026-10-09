@@ -15,6 +15,10 @@ const ROBLOX_PLUS_NOTE_SELECTOR =
     "li.padding-top-xsmall a[href='/plus']:not(.minimised-robloxplus-note)";
 const BUY_ROBUX_PLUS_SELECTOR =
     "div.buy-robux-content div div div.flex a[href='/plus']";
+const BUY_ROBUX_PLUS_SHOP =
+    ".subscribe-upsell-container.subscribe-upsell-banner";
+const PRIVATE_SERVER_PLUS_SELECTOR =
+    '#game-instances .padding-bottom-large .icon-regular-roblox-plus';
 
 let plusType = plusTypeEnum.Reduced;
 let initialized = false;
@@ -100,7 +104,13 @@ function updateBuyRobuxPlus(robloxPlusLink) {
     );
     plusSection.remove();
 }
-
+function updateBuyRobuxPlusShop(robloxShopThing) {
+    if (plusType >= plusTypeEnum.None) {
+        robloxShopThing.remove();
+        return;
+    }
+    robloxShopThing.style.display = 'none';
+}
 async function asyncInit() {
     if (await settings.reducePlusAds)
         if (await settings.removeAllPlusAdds) plusType = plusTypeEnum.None;
@@ -116,6 +126,14 @@ async function asyncInit() {
     observeElement(BUY_ROBUX_PLUS_SELECTOR, updateBuyRobuxPlus, {
         multiple: true,
     });
+    observeElement(BUY_ROBUX_PLUS_SHOP, updateBuyRobuxPlusShop, {
+        multiple: true,
+    });
+    observeElement(
+        PRIVATE_SERVER_PLUS_SELECTOR,
+        (plusIcon) => plusIcon.closest('.padding-bottom-large')?.remove(),
+        { multiple: true },
+    );
 }
 
 export function init() {

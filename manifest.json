@@ -1,11 +1,23 @@
 {
     "manifest_version": 3,
-    "name": "RoValra - Roblox Improved (Firefox)",
-    "version": "2.6.4.2",
-    "author": "8prct (Firefox/Zen port); NotValra (original RoValra)",
-    "homepage_url": "https://github.com/8prct/rovalra-firefox-fork",
-    "description": "Unofficial Firefox and Zen Browser port of RoValra, maintained by 8prct.",
+    "name": "__MSG_extensionName__",
+    "version": "2.6.15.1",
+    "description": "__MSG_extensionDescription__",
+    "default_locale": "en",
     "content_scripts": [
+        {
+            "matches": ["*://*.roblox.com/*"],
+            "js": ["intercept.js"],
+            "run_at": "document_start",
+            "world": "MAIN",
+            "all_frames": false
+        },
+        {
+            "matches": ["*://*.roblox.com/*"],
+            "js": ["public/Assets/data/serverid_extractor.js"],
+            "run_at": "document_start",
+            "world": "MAIN"
+        },
         {
             "matches": ["*://*.roblox.com/*"],
             "js": ["content.js"],
@@ -14,21 +26,18 @@
             "all_frames": false
         }
     ],
-    "permissions": ["declarativeNetRequest", "storage", "scripting", "menus"],
+    "permissions": ["declarativeNetRequest", "storage", "scripting"],
     "host_permissions": [
-        "https://*.roblox.com/*",
-        "https://apis.rovalra.com/*",
-        "https://catalog.rovalra.com/*",
-        "https://www.rovalra.com/*",
-        "https://*.rbxcdn.com/*",
-        "https://rbxcdn.com/*"
+        "https://games.roblox.com/*",
+        "*://*.roblox.com/*",
+        "https://gamejoin.roblox.com/v1/join-game-instance",
+        "https://users.roblox.com/*"
     ],
     "background": {
-        "scripts": ["background.js"],
-        "type": "module"
+        "service_worker": "background.js"
     },
 
-    "optional_permissions": ["webNavigation", "webRequest"],
+    "optional_permissions": ["webNavigation", "contextMenus", "webRequest"],
     "declarative_net_request": {
         "rule_resources": [
             {
@@ -51,11 +60,8 @@
                 "Assets/data/serverid_extractor.js",
                 "data/*",
                 "intercept.js",
-                "swagger-ui-bundle.js",
                 "assets/*",
-                "css/*",
-                "public/Assets/permission_request.html",
-                "public/Assets/permission_request.js"
+                "css/*"
             ],
             "matches": ["https://www.roblox.com/*", "*://*.roblox.com/*"]
         }
@@ -73,15 +79,5 @@
         "16": "public/Assets/icon-16.png",
         "48": "public/Assets/icon-48.png",
         "128": "public/Assets/icon-128.png"
-    },
-    "browser_specific_settings": {
-        "gecko": {
-            "id": "rovalra-firefox-fork@local",
-            "strict_min_version": "142.0",
-            "data_collection_permissions": {
-                "required": ["none"],
-                "optional": []
-            }
-        }
     }
 }

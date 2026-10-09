@@ -18,7 +18,7 @@ let swaggerUiBundlePromise = null;
 async function getSwaggerUiBundle() {
     if (!swaggerUiBundlePromise) {
         swaggerUiBundlePromise = import(
-            chrome.runtime.getURL('swagger-ui-bundle.js')
+            'swagger-ui-dist/swagger-ui-bundle.js'
         ).then((module) => module.default || module);
     }
 
@@ -208,11 +208,7 @@ function removeRequestHeader(headers, name) {
     if (headers instanceof Headers) {
         const nextHeaders = new Headers(headers);
         nextHeaders.delete(name);
-        const result = {};
-        nextHeaders.forEach((value, key) => {
-            result[key] = value;
-        });
-        return result;
+        return Object.fromEntries(nextHeaders.entries());
     }
 
     if (Array.isArray(headers)) {

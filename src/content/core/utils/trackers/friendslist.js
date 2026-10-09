@@ -3,6 +3,8 @@
 import { callRobloxApiJson } from '../../api';
 import { getAuthenticatedUserId } from '../../user';
 import { ts } from '../../locale/i18n.js';
+import { settings } from '../../settings/getSettings.js';
+import { reportDetectedUnfriends } from './unfriendDetector.js';
 import {
     getMultiProfileInsights,
     getUserProfileData,
@@ -11,10 +13,12 @@ import {
 } from '../../apis/users.js';
 
 const FRIENDS_DATA_KEY = 'rovalra_friends_data';
-const FRIENDS_DATA_VERSION = 5;
+const FRIENDS_DATA_VERSION = 6;
 const FRIENDS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes for heavy data
 const ONLINE_STATUS_CACHE_DURATION = 1 * 60 * 1000; // 1 minute for online status
 const TRUSTED_FRIENDS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const UNFRIEND_SNAPSHOT_KEY = 'rovalra_unfriend_detector_snapshot';
+const UNFRIEND_PENDING_KEY = 'rovalra_pending_unfriends';
 
 export function getFriendRequestOriginText(originId) {
     const fromText = ts('friendsSince.originFrom');
@@ -42,6 +46,8 @@ export function getFriendRequestOriginText(originId) {
             return `${fromText} ${ts('friendsSince.originPeopleYouMayKnow')}`;
         case 11: // School memberlist
             return `${fromText} ${ts('friendsSince.originschoolmemberlist')}`;
+        case 12: // Social tabs page (thanks return_request)
+            return `${fromText} ${ts('friendsSince.originSocialTabsPage')}`;
         default:
             return `${fromText} ${ts('friendsSince.originUnknown')}`;
     }
@@ -196,6 +202,7 @@ export async function updateFriendsList(userId) {
             onlineMap.set(item.id, {
                 lastOnline: item.userPresence?.lastOnline,
                 lastLocation: item.userPresence?.placeId,
+                sortScore: item.sortScore,
             });
         });
 
@@ -413,6 +420,8 @@ export async function updateFriendsList(userId) {
                             displayName: displayName,
                             combinedName: combinedName,
                             isVerified: profile.isVerified,
+                            hasRobloxSubscription:
+                                profile.hasRobloxSubscription,
                             isDeleted: profile.isDeleted,
                             isTrusted: isTrusted,
                             canChat: chatStatus?.canChat ?? null,
@@ -430,6 +439,10 @@ export async function updateFriendsList(userId) {
                             lastLocation:
                                 presence?.lastLocation ||
                                 existingFriend?.lastLocation ||
+                                null,
+                            sortScore:
+                                presence?.sortScore ??
+                                existingFriend?.sortScore ??
                                 null,
                         };
                     },
@@ -460,36 +473,6 @@ export async function updateFriendsList(userId) {
     }
 }
 
-async function refreshFriendsCountIfNeeded(userId, currentUserData) {
-    const friendsCount = await fetchFriendsCount(userId);
-
-    if (
-        friendsCount === null ||
-        friendsCount !== currentUserData.friendsList.length
-    ) {
-        return true;
-    }
-
-    const storageResult = await new Promise((resolve) =>
-        chrome.storage.local.get([FRIENDS_DATA_KEY], resolve),
-    );
-    const allUsersFriendsData = storageResult[FRIENDS_DATA_KEY] || {};
-    allUsersFriendsData[userId] = {
-        ...allUsersFriendsData[userId],
-        friendsCount,
-        lastChecked: Date.now(),
-    };
-
-    await new Promise((resolve) =>
-        chrome.storage.local.set(
-            { [FRIENDS_DATA_KEY]: allUsersFriendsData },
-            resolve,
-        ),
-    );
-
-    return false;
-}
-
 async function updateOnlineStatusOnly(userId, currentFriendsList) {
     try {
         const onlineData = await fetchFriendsOnlineStatus(userId);
@@ -498,6 +481,7 @@ async function updateOnlineStatusOnly(userId, currentFriendsList) {
             onlineMap.set(item.id, {
                 lastOnline: item.userPresence?.lastOnline,
                 lastLocation: item.userPresence?.placeId,
+                sortScore: item.sortScore,
             });
         });
 
@@ -509,6 +493,7 @@ async function updateOnlineStatusOnly(userId, currentFriendsList) {
                     ...friend,
                     lastOnline: presence.lastOnline || friend.lastOnline,
                     lastLocation: presence.lastLocation || friend.lastLocation,
+                    sortScore: presence.sortScore ?? friend.sortScore ?? null,
                 };
             }
             return friend;
@@ -569,6 +554,71 @@ async function updateTrustedFriendsOnly(userId, currentFriendsList) {
     }
 }
 
+async function detectUnfriendEvents(userId, currentFriendRecords) {
+    if (!(await settings.unfriendDetectorEnabled)) return;
+    if (!currentFriendRecords?.length) return;
+
+    const actualUserId = await getAuthenticatedUserId(true);
+    if (!actualUserId || String(actualUserId) !== String(userId)) return;
+
+    const result = await new Promise((resolve) =>
+        chrome.storage.local.get(
+            [UNFRIEND_SNAPSHOT_KEY, FRIENDS_DATA_KEY],
+            resolve,
+        ),
+    );
+
+    const expectedCount = result[FRIENDS_DATA_KEY]?.[userId]?.friendsCount;
+    if (
+        typeof expectedCount === 'number' &&
+        currentFriendRecords.length < expectedCount
+    ) {
+        return;
+    }
+
+    const allSnapshots = result[UNFRIEND_SNAPSHOT_KEY] || {};
+    const previousSnapshot = allSnapshots[userId] || null;
+    const currentIds = new Set(currentFriendRecords.map((friend) => friend.id));
+
+    if (previousSnapshot) {
+        const removedFriends = Object.values(previousSnapshot).filter(
+            (friend) => !currentIds.has(friend.id),
+        );
+        await reportDetectedUnfriends(userId, removedFriends);
+    }
+
+    const pendingResult = await new Promise((resolve) =>
+        chrome.storage.local.get([UNFRIEND_PENDING_KEY], resolve),
+    );
+    const allPending = pendingResult[UNFRIEND_PENDING_KEY] || {};
+    const pending = allPending[userId] || [];
+    const stillUnfriended = pending.filter(
+        (friend) => !currentIds.has(friend.id),
+    );
+    if (stillUnfriended.length !== pending.length) {
+        allPending[userId] = stillUnfriended;
+        await new Promise((resolve) =>
+            chrome.storage.local.set(
+                { [UNFRIEND_PENDING_KEY]: allPending },
+                resolve,
+            ),
+        );
+    }
+
+    const snapshot = {};
+    currentFriendRecords.forEach((friend) => {
+        snapshot[friend.id] = friend;
+    });
+    allSnapshots[userId] = snapshot;
+
+    await new Promise((resolve) =>
+        chrome.storage.local.set(
+            { [UNFRIEND_SNAPSHOT_KEY]: allSnapshots },
+            resolve,
+        ),
+    );
+}
+
 export async function getFriendsList() {
     const userId = await getAuthenticatedUserId();
     if (!userId) return [];
@@ -581,7 +631,9 @@ export async function getFriendsList() {
     const currentUserData = allUsersFriendsData[userId];
 
     if (!currentUserData?.friendsList) {
-        return await updateFriendsList(userId);
+        const friendsList = await updateFriendsList(userId);
+        await detectUnfriendEvents(userId, friendsList);
+        return friendsList;
     }
 
     const now = Date.now();
@@ -596,13 +648,9 @@ export async function getFriendsList() {
         TRUSTED_FRIENDS_CACHE_DURATION;
 
     if (needsFullRefresh) {
-        const friendsChanged = await refreshFriendsCountIfNeeded(
-            userId,
-            currentUserData,
-        );
-        if (friendsChanged) {
-            return await updateFriendsList(userId);
-        }
+        const friendsList = await updateFriendsList(userId);
+        await detectUnfriendEvents(userId, friendsList);
+        return friendsList;
     }
 
     if (needsOnlineRefresh) {
@@ -613,12 +661,15 @@ export async function getFriendsList() {
     }
 
     if (needsTrustedRefresh) {
-        return await updateTrustedFriendsOnly(
+        const friendsList = await updateTrustedFriendsOnly(
             userId,
             currentUserData.friendsList,
         );
+        await detectUnfriendEvents(userId, friendsList);
+        return friendsList;
     }
 
+    await detectUnfriendEvents(userId, currentUserData.friendsList);
     return currentUserData.friendsList;
 }
 
@@ -637,9 +688,23 @@ export async function getCachedFriendsList() {
 }
 
 let onlineStatusInterval = null;
+let initialFriendsRefreshPromise = null;
 
 export function initFriendsListTracking() {
-    getFriendsList();
+    if (!initialFriendsRefreshPromise) {
+        initialFriendsRefreshPromise = (async () => {
+            const userId = await getAuthenticatedUserId(true);
+            if (!userId) return;
+
+            const friendsList = await updateFriendsList(userId);
+            await detectUnfriendEvents(userId, friendsList);
+        })().catch((error) => {
+            console.error(
+                'RoValra: Failed to refresh friends list on startup',
+                error,
+            );
+        });
+    }
 
     if (!onlineStatusInterval) {
         onlineStatusInterval = setInterval(async () => {

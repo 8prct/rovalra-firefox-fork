@@ -15,12 +15,6 @@ const dracoPath = path.join(
     'dist',
     'draco_decoder.js',
 );
-const swaggerUiCssPath = path.join(
-    __dirname,
-    'node_modules',
-    'swagger-ui-dist',
-    'swagger-ui.css',
-);
 const backgroundEntryPath = path.join(
     __dirname,
     'src',
@@ -60,19 +54,20 @@ try {
 //E why the hell did i make this comment?
 const bannerText = `/*!
  * ${pkg.name} v${pkg.version}
- * Firefox/Zen port maintained by 8prct
+ * Firefox/Zen fork maintained by 8prct
  * Original RoValra by NotValra and contributors
  * License: GPL-3.0
+ * Fork: https://github.com/8prct/rovalra-firefox-fork
  * Upstream: https://github.com/NotValra/RoValra
  * This extension is provided AS-IS without warranty.
  */`;
 
 const commonConfig = {
-    minify: true,
+    minify: false,
 
-    minifyWhitespace: true,
+    minifyWhitespace: false,
     minifySyntax: true,
-    minifyIdentifiers: true,
+    minifyIdentifiers: false,
 
     keepNames: true,
 
@@ -116,21 +111,6 @@ esbuild
         entryPoints: [interceptEntryPath],
         outfile: 'dist/intercept.js',
         bundle: false,
-    })
-    .catch(() => process.exit(1));
-
-esbuild
-    .build({
-        ...commonConfig,
-        stdin: {
-            contents:
-                "import SwaggerUIBundle from 'swagger-ui-dist/swagger-ui-bundle.js'; export default SwaggerUIBundle;",
-            resolveDir: __dirname,
-            sourcefile: 'swagger-ui-entry.js',
-        },
-        outfile: 'dist/swagger-ui-bundle.js',
-        bundle: true,
-        format: 'esm',
     })
     .catch(() => process.exit(1));
 
@@ -231,16 +211,6 @@ if (fs.existsSync(cssDir)) {
     }
 }
 
-if (fs.existsSync(swaggerUiCssPath)) {
-    if (!fs.existsSync('dist/css'))
-        fs.mkdirSync('dist/css', { recursive: true });
-    fs.copyFileSync(swaggerUiCssPath, 'dist/css/swagger-ui.css');
-    console.log('Copied Swagger UI CSS: dist/css/swagger-ui.css');
-} else {
-    console.error(`Error: swagger-ui.css not found at ${swaggerUiCssPath}`);
-    process.exit(1);
-}
-
 function processDirectory(src, dest) {
     if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
 
@@ -261,9 +231,9 @@ function processDirectory(src, dest) {
 
                     const result = esbuild.transformSync(content, {
                         loader: ext.slice(1),
-                        minifyWhitespace: true,
+                        minifyWhitespace: false,
                         minifySyntax: true,
-                        minifyIdentifiers: true,
+                        minifyIdentifiers: false,
                         keepNames: true,
                         legalComments: 'none',
                         banner: bannerText,
@@ -298,9 +268,28 @@ function processDirectory(src, dest) {
 
 if (fs.existsSync('public')) {
     processDirectory('public', path.join('dist', 'public'));
+
+    const localeDirectory = path.join('public', 'Assets', 'locales');
+    if (fs.existsSync(localeDirectory)) {
+        const localeCodes = fs
+            .readdirSync(localeDirectory, { withFileTypes: true })
+            .filter(
+                (entry) =>
+                    entry.isFile() && path.extname(entry.name) === '.json',
+            )
+            .map((entry) => path.basename(entry.name, '.json'))
+            .sort();
+        fs.writeFileSync(
+            path.join('dist', 'public', 'Assets', 'locales', 'index.json'),
+            JSON.stringify(localeCodes),
+        );
+    }
 }
 if (fs.existsSync('assets')) {
     processDirectory('assets', path.join('dist', 'assets'));
+}
+if (fs.existsSync('_locales')) {
+    processDirectory('_locales', path.join('dist', '_locales'));
 }
 
 if (fs.existsSync('manifest.json')) {

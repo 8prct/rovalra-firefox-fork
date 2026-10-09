@@ -204,6 +204,61 @@ body.rovalra-settings-page {
         vertical-align: -2px;
     }
 
+    .rovalra-github-sponsors-section {
+        margin-bottom: 25px;
+    }
+
+    .rovalra-donator-section-heading {
+        color: var(--rovalra-main-text-color);
+        margin: 0 0 10px;
+        font-size: 18px;
+    }
+
+    .rovalra-github-sponsors-heading {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .rovalra-github-sponsors-link {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .rovalra-github-sponsors-link:hover {
+        text-decoration: underline;
+    }
+
+    .rovalra-github-sponsors-blush {
+        width: 20px;
+        height: 20px;
+        object-fit: contain;
+        flex-shrink: 0;
+    }
+
+    .rovalra-github-sponsors-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, 56px);
+        gap: 5px;
+        align-items: center;
+    }
+
+    .rovalra-github-sponsor-link {
+        display: block;
+        width: 56px;
+        height: 56px;
+    }
+
+    .rovalra-github-sponsor-avatar {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 50%;
+        overflow: hidden;
+        background-color: var(--rovalra-container-background-color);
+    }
+
     .rovalra-contributors-toolbar {
         display: flex;
         align-items: center;
@@ -345,6 +400,17 @@ body.rovalra-settings-page {
         }
     }
 
+    .rovalra-donator-currency-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 12px;
+        color: var(--rovalra-secondary-text-color);
+        font-size: 16px;
+        font-weight: 700;
+    }
+
     .rovalra-donator-perks-compare {
         display: flex;
         flex-direction: column;
@@ -358,6 +424,7 @@ body.rovalra-settings-page {
     }
 
     .rovalra-donator-tier-heading {
+        position: relative;
         display: flex;
         align-items: center;
         gap: 10px;
@@ -370,6 +437,17 @@ body.rovalra-settings-page {
         border: 1px solid var(--rovalra-border-color, rgba(128, 128, 128, 0.2));
         border-radius: 8px;
         color: var(--rovalra-main-text-color);
+    }
+
+    .rovalra-donator-current-tier-pill {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        z-index: 1;
+        transform: translate(-50%, -50%);
+        background-color: #fff;
+        color: #000;
+        white-space: nowrap;
     }
 
     .rovalra-donator-tier-heading img {
@@ -531,11 +609,29 @@ body.rovalra-settings-page {
     }
 
     .rovalra-changelog-title {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
         margin: 0 0 4px 0;
         color: var(--rovalra-main-text-color);
         font-size: 18px;
         line-height: 1.25;
         overflow-wrap: anywhere;
+    }
+
+    .rovalra-changelog-current-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 20px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: var(--rovalra-playbutton-color);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1;
+        white-space: nowrap;
     }
 
     .rovalra-changelog-dates {
@@ -691,7 +787,8 @@ body.rovalra-settings-page {
     }
 
     a.rovalra-tiktok-link {
-        & > icon { /* the tiktok icon is very small so i made it large then put it back and aligned it with the other text */
+        & > icon {
+            /* the tiktok icon is very small so i made it large then put it back and aligned it with the other text */
             transform: translate(-4px, 1px);
             margin-right: -8px;
         }

@@ -2,6 +2,7 @@ import { getAssets } from '../../assets.js';
 import { callRobloxApi } from '../../api.js';
 import { SETTINGS_CONFIG } from '../settingConfig.js';
 import { createDropdown } from '../../ui/dropdown.js';
+import { t, ts } from '../../locale/i18n.js';
 
 const ACCOUNT_STANDING_TAB_IDS = new Set([
     'info',
@@ -10,32 +11,6 @@ const ACCOUNT_STANDING_TAB_IDS = new Set([
     'store',
     'changelogs',
 ]);
-
-const SETTINGS_TAB_FALLBACK_LABELS = {
-    info: 'Info',
-    credits: 'Contributors',
-    donatorPerks: 'Donator Perks',
-    store: 'Store',
-    changelogs: 'Changelogs',
-    accountStanding: 'Account Standing',
-    settings: 'Settings',
-};
-
-export function getSettingsTabLabel(item) {
-    const translatedLabel = item?.text;
-    if (
-        typeof translatedLabel === 'string' &&
-        translatedLabel.trim().length > 0
-    ) {
-        return translatedLabel;
-    }
-
-    return SETTINGS_TAB_FALLBACK_LABELS[item?.id] || item?.id || 'Info';
-}
-
-export function getSettingsTabKey(item) {
-    return getSettingsTabLabel(item).toLowerCase();
-}
 
 function isAccountStandingDirectLink() {
     const rovalraTab = new URLSearchParams(window.location.search).get(
@@ -102,16 +77,87 @@ function shouldShowStaticTab(item, accountStandingTabVisible) {
 function ensureDeveloperSettings() {
     if (!SETTINGS_CONFIG.Developer) {
         SETTINGS_CONFIG.Developer = {
-            title: 'RoValra Developer',
+            title: ts('common.rovalraDeveloper'),
             settings: {},
         };
     }
 }
 
 function shouldShowSettingsSection(sectionName, options = {}) {
+    if (SETTINGS_CONFIG[sectionName]?.hidden) return false;
     if (sectionName === 'Developer' && !options.devTabAdded) return false;
     if (sectionName === 'FunStuff' && !options.funStuffTabEnabled) return false;
     return true;
+}
+
+const INCOMPATIBILITY_DETECTIONS = [
+    {
+        name: 'RoGold',
+        bodyClass: 'rogold',
+    },
+    {
+        name: 'BTRoblox',
+        selector: 'html[btr-loaded="true"]',
+    },
+];
+
+function getDetectedIncompatibilities() {
+    return INCOMPATIBILITY_DETECTIONS.filter((detection) => {
+        if (detection.bodyClass) {
+            return document.body?.classList.contains(detection.bodyClass);
+        }
+
+        return Boolean(
+            detection.selector && document.querySelector(detection.selector),
+        );
+    });
+}
+
+function formatCompatibilityList(names) {
+    if (names.length <= 1) return names[0] || '';
+    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    return `${names.slice(0, -1).join(', ')}, and ${names.at(-1)}`;
+}
+
+async function createCompatibilityWarning() {
+    const detectedNames = getDetectedIncompatibilities().map(
+        (detection) => detection.name,
+    );
+    if (detectedNames.length === 0) return null;
+
+    const detectedExtensions = formatCompatibilityList(detectedNames);
+
+    const warning = document.createElement('div');
+    warning.id = 'rovalra-compatibility-notice-banner';
+    warning.setAttribute('role', 'alert');
+
+    const entry = document.createElement('div');
+    entry.className = 'rovalra-game-notice-entry';
+
+    const iconContainer = document.createElement('div');
+    iconContainer.className = 'rovalra-game-notice-icon';
+    iconContainer.innerHTML = '<icon material size="48px">warning_amber</icon>';
+
+    const textContainer = document.createElement('div');
+    textContainer.className = 'rovalra-game-notice-text-container';
+
+    const title = document.createElement('div');
+    title.className = 'rovalra-game-notice-title';
+    title.textContent = await t('settings.compatibilityWarning.title', {
+        extensions: detectedExtensions,
+    });
+
+    const description = document.createElement('div');
+    description.className = 'rovalra-game-notice-description';
+    description.textContent = await t(
+        'settings.compatibilityWarning.description',
+        { extensions: detectedExtensions },
+    );
+
+    textContainer.append(title, description);
+    entry.append(iconContainer, textContainer);
+    warning.appendChild(entry);
+    return warning;
 }
 
 export async function buildSettingsPage({
@@ -176,12 +222,14 @@ export async function buildSettingsPage({
         'width: 35px; height: 35px; margin-left: 5px;  user-select: none;';
 
     let rovalraHeader = document.createElement('h1');
-    rovalraHeader.textContent = 'RoValra Settings';
+    rovalraHeader.textContent = ts('common.rovalraSettings');
     rovalraHeader.style.margin = '0';
     rovalraHeader.style.color = 'var(--rovalra-main-text-color)';
 
     headerContainer.appendChild(rovalraHeader);
     rovalraHeader.appendChild(rovalraIcon);
+
+    const compatibilityWarning = await createCompatibilityWarning();
 
     let settingsContainer = document.createElement('div');
     settingsContainer.id = 'settings-container';
@@ -216,10 +264,9 @@ export async function buildSettingsPage({
                 shouldShowStaticTab(item, accountStandingTabVisible),
             )
             .forEach((item) => {
-                const label = getSettingsTabLabel(item);
                 dropdownItems.push({
-                    value: label.toLowerCase(),
-                    label,
+                    value: item.text.toLowerCase(),
+                    label: item.text,
                 });
             });
 
@@ -240,7 +287,7 @@ export async function buildSettingsPage({
         const mobileDropdown = createDropdown({
             items: dropdownItems,
             initialValue: initialTab,
-            placeholder: 'Select Setting...',
+                        placeholder: ts('settings.ui.search.placeholder'),
             onValueChange: async (value) => {
                 const newUrl = new URL(window.location.href);
                 if (newUrl.searchParams.get('rovalra') !== value) {
@@ -300,6 +347,8 @@ export async function buildSettingsPage({
         'display: block; position: relative; overflow: visible; width: 100%;';
 
     settingsContainer.insertAdjacentElement('afterbegin', rovalraHeader);
+    if (compatibilityWarning)
+        rovalraHeader.insertAdjacentElement('afterend', compatibilityWarning);
 
     uiContainer.innerHTML = '';
 
@@ -441,7 +490,7 @@ function createUnifiedMenu({
     const searchInput = document.createElement('input');
     searchInput.type = 'search';
     searchInput.id = 'settings-search-input';
-    searchInput.placeholder = 'Search Settings...';
+    searchInput.placeholder = ts('settings.ui.search.placeholder');
     searchInput.style.cssText =
         'width: 89%; padding: 8px; border-radius: 0px; font-size: 14px; border: 0px solid var(--rovalra-container-background-color) !important; background: transparent !important; color: var(--rovalra-main-text-color) !important;';
 
@@ -488,26 +537,24 @@ function createUnifiedMenu({
         shouldShowStaticTab(item, accountStandingTabVisible),
     );
     staticItems.forEach((item) => {
-        const label = getSettingsTabLabel(item);
-        const tabKey = getSettingsTabKey(item);
         const listItem = document.createElement('li');
-        listItem.id = `${tabKey}-tab`;
-        listItem.dataset.text = label;
+        listItem.id = `${item.text.toLowerCase()}-tab`;
+        listItem.dataset.text = item.text;
         listItem.dataset.staticId = item.id;
         listItem.className = 'menu-option';
         listItem.setAttribute('role', 'tab');
         const link = document.createElement('a');
         link.className = 'menu-option-content';
-        link.href = `#!/${tabKey}`;
+        link.href = `#!/${item.text.toLowerCase()}`;
         const span = document.createElement('span');
         span.className = 'font-caption-header';
-        span.textContent = label;
+        span.textContent = item.text;
         link.appendChild(span);
         listItem.appendChild(link);
         menuList.appendChild(listItem);
         link.addEventListener('click', async (e) => {
             e.preventDefault();
-            const newHashKey = tabKey;
+            const newHashKey = item.text.toLowerCase();
             const newUrl = new URL(window.location.href);
             if (newUrl.searchParams.get('rovalra') !== newHashKey) {
                 newUrl.searchParams.set('rovalra', newHashKey);
@@ -519,7 +566,7 @@ function createUnifiedMenu({
             const dropdownTrigger = document.querySelector(
                 '#rovalra-mobile-menu-container .rovalra-dropdown-trigger span',
             );
-            if (dropdownTrigger) dropdownTrigger.textContent = label;
+            if (dropdownTrigger) dropdownTrigger.textContent = item.text;
         });
     });
 
@@ -549,28 +596,26 @@ function createUnifiedMenu({
 }
 
 function addStaticTabItem(item, menuList, loadTabContent) {
-    const label = getSettingsTabLabel(item);
-    const tabKey = getSettingsTabKey(item);
     const listItem = document.createElement('li');
-    listItem.id = `${tabKey}-tab`;
-    listItem.dataset.text = label;
+    listItem.id = `${item.text.toLowerCase()}-tab`;
+    listItem.dataset.text = item.text;
     listItem.dataset.staticId = item.id;
     listItem.className = 'menu-option';
     listItem.setAttribute('role', 'tab');
 
     const link = document.createElement('a');
     link.className = 'menu-option-content';
-    link.href = `#!/${tabKey}`;
+    link.href = `#!/${item.text.toLowerCase()}`;
 
     const span = document.createElement('span');
     span.className = 'font-caption-header';
-    span.textContent = label;
+    span.textContent = item.text;
     link.appendChild(span);
     listItem.appendChild(link);
 
     link.addEventListener('click', async (e) => {
         e.preventDefault();
-        const newHashKey = tabKey;
+        const newHashKey = item.text.toLowerCase();
         const newUrl = new URL(window.location.href);
         if (newUrl.searchParams.get('rovalra') !== newHashKey) {
             newUrl.searchParams.set('rovalra', newHashKey);
@@ -582,7 +627,7 @@ function addStaticTabItem(item, menuList, loadTabContent) {
         const dropdownTrigger = document.querySelector(
             '#rovalra-mobile-menu-container .rovalra-dropdown-trigger span',
         );
-        if (dropdownTrigger) dropdownTrigger.textContent = label;
+        if (dropdownTrigger) dropdownTrigger.textContent = item.text;
     });
 
     const separator = menuList.querySelector('.menu-separator');

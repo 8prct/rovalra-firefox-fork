@@ -1,7 +1,6 @@
 import { callRobloxApiJson } from '../api.js';
 import { getValidAccessToken } from '../oauth/oauth.js';
 import { getAuthenticatedUserId } from '../user.js';
-import { getCurrentUserTier } from '../settings/handlesettings.js';
 import {
     getTemporaryLimitedUserMessage,
     isTemporaryLimitedError,
@@ -18,8 +17,22 @@ import {
 } from '../configs/userIds.js';
 import * as cache from '../storage/cacheHandler.js';
 import { normalizeProfilePronouns } from '../profile/pronouns.js';
+import { findFrameByLink, getFrames } from '../configs/frames.js';
 
 const GRADIENT_NAME_API_KEY = 'GradientName';
+
+function extractBadgeLinks(apiSettings) {
+    const badges = apiSettings?.badges;
+    if (!badges || typeof badges !== 'object') return {};
+
+    return Object.fromEntries(
+        Object.entries(badges).flatMap(([key, value]) => {
+            return typeof value === 'string' && value.trim()
+                ? [[key, value.trim()]]
+                : [];
+        }),
+    );
+}
 
 function extractProfilePronouns(apiSettings) {
     const value =
@@ -28,6 +41,17 @@ function extractProfilePronouns(apiSettings) {
         apiSettings?.user_tag ??
         apiSettings?.userTag;
     return normalizeProfilePronouns(value);
+}
+
+async function normalizeBertLink(value) {
+    const candidate =
+        value && typeof value === 'object'
+            ? (value.link ?? value.value)
+            : value;
+    if (!candidate || candidate === 'none') return null;
+
+    const frames = await getFrames().catch(() => []);
+    return findFrameByLink(frames, candidate)?.link || String(candidate);
 }
 
 const BATCH_MAX_SIZE = 50;
@@ -51,18 +75,19 @@ function assertValidUserId(userId) {
     }
 }
 
-async function saveToCache(cacheKey, settings, { memoryOnly = false } = {}) {
+const OWN_SETTINGS_STALE_MS = 300000;
+const OTHER_SETTINGS_STALE_MS = 300000;
+
+async function saveToCache(cacheKey, settings) {
     const cacheData = {
         data: settings,
         timestamp: Date.now(),
     };
     memoryCache.set(cacheKey, cacheData);
-    if (!memoryOnly) {
-        await cache.set('user_settings', cacheKey, cacheData, 'local');
-    }
+    await cache.set('user_settings', cacheKey, cacheData, 'local');
 }
 
-async function invalidateAuthenticatedUserSettingsCache() {
+export async function invalidateAuthenticatedUserSettingsCache() {
     const authenticatedUserId = await getAuthenticatedUserId();
     if (!authenticatedUserId) return;
 
@@ -120,6 +145,7 @@ async function fetchAndProcessSettings(userId, options = {}) {
                     apiSettings.environment === 1) &&
                 !apiSettings.status &&
                 !apiSettings.border &&
+                !apiSettings.berts &&
                 !apiSettings.gradient &&
                 !apiSettings[GRADIENT_NAME_API_KEY] &&
                 !apiSettings.GradientName &&
@@ -128,7 +154,9 @@ async function fetchAndProcessSettings(userId, options = {}) {
                 !Number(apiSettings.fav_game) &&
                 !Number(apiSettings.fav_group) &&
                 !Number(apiSettings.fav_decal) &&
-                Object.keys(apiSettings).length <= 4
+                !Object.keys(extractBadgeLinks(apiSettings)).length &&
+                Object.keys(apiSettings).length <= 4 &&
+                !apiSettings.theme
             ) {
                 apiProvidedMeaningfulSettings = false;
             } else {
@@ -144,6 +172,7 @@ async function fetchAndProcessSettings(userId, options = {}) {
     let finalEnvironment = 1;
     let finalGradient = null;
     let finalBorder = null;
+    let finalFrame = null;
     let finalGradientName = null;
 
     if (apiProvidedMeaningfulSettings) {
@@ -151,6 +180,7 @@ async function fetchAndProcessSettings(userId, options = {}) {
         finalEnvironment = apiSettings.environment;
         finalGradient = apiSettings.gradient;
         finalBorder = apiSettings.border ?? null;
+        finalFrame = await normalizeBertLink(apiSettings.berts);
         finalGradientName =
             apiSettings[GRADIENT_NAME_API_KEY] ??
             apiSettings.GradientName ??
@@ -171,12 +201,26 @@ async function fetchAndProcessSettings(userId, options = {}) {
         );
     }
 
+    if (
+        isOwnProfile &&
+        apiSettings &&
+        apiSettings.berts &&
+        apiProvidedMeaningfulSettings
+    ) {
+        document.dispatchEvent(
+            new CustomEvent('rovalra:syncProfileFrame', {
+                detail: { frameUrl: finalFrame },
+            }),
+        );
+    }
+
     return {
         status: finalStatus,
         environment: finalEnvironment || 1,
         gradient: finalGradient,
         GradientName: finalGradientName,
         border: finalBorder,
+        berts: finalFrame,
         pronouns: extractProfilePronouns(apiSettings),
         Views: Number(apiSettings.Views) || 0,
         hide_views:
@@ -189,6 +233,8 @@ async function fetchAndProcessSettings(userId, options = {}) {
         fav_game: Number(apiSettings.fav_game) || 0,
         fav_group: Number(apiSettings.fav_group) || 0,
         fav_decal: Number(apiSettings.fav_decal) || 0,
+        badges: extractBadgeLinks(apiSettings),
+        theme: apiSettings.theme || '',
     };
 }
 
@@ -248,9 +294,7 @@ async function processBatchQueue() {
                             item.options,
                         );
 
-                        await saveToCache(cacheKey, settings, {
-                            memoryOnly: cacheKey === authenticatedUserId,
-                        });
+                        await saveToCache(cacheKey, settings);
                         processedKeys.add(cacheKey);
 
                         const resolvers = pendingResolvers.get(cacheKey);
@@ -271,9 +315,7 @@ async function processBatchQueue() {
                     batchItem.options,
                 );
 
-                await saveToCache(cacheKey, settings, {
-                    memoryOnly: cacheKey === authenticatedUserId,
-                });
+                await saveToCache(cacheKey, settings);
                 processedKeys.add(cacheKey);
 
                 const resolvers = pendingResolvers.get(cacheKey);
@@ -285,29 +327,16 @@ async function processBatchQueue() {
         }
     } catch (error) {
         console.warn(
-            'RoValra: Batch settings fetch failed, falling back to individual requests.',
+            'RoValra: Batch settings fetch failed without retrying.',
             error,
         );
 
         for (const batchItem of currentBatch) {
             const cacheKey = String(batchItem.userId);
-            try {
-                const settings = await fetchAndProcessSettings(
-                    batchItem.userId,
-                    batchItem.options,
-                );
-
-                const resolvers = pendingResolvers.get(cacheKey);
-                if (resolvers) {
-                    resolvers.forEach((r) => r.resolve(settings));
-                    pendingResolvers.delete(cacheKey);
-                }
-            } catch (e) {
-                const resolvers = pendingResolvers.get(cacheKey);
-                if (resolvers) {
-                    resolvers.forEach((r) => r.reject(e));
-                    pendingResolvers.delete(cacheKey);
-                }
+            const resolvers = pendingResolvers.get(cacheKey);
+            if (resolvers) {
+                resolvers.forEach((r) => r.reject(error));
+                pendingResolvers.delete(cacheKey);
             }
         }
     } finally {
@@ -332,6 +361,7 @@ async function processApiSettings(userId, apiSettings, options) {
             (apiSettings.environment === 0 || apiSettings.environment === 1) &&
             !apiSettings.status &&
             !apiSettings.border &&
+            !apiSettings.berts &&
             !apiSettings.gradient &&
             !apiSettings[GRADIENT_NAME_API_KEY] &&
             !apiSettings.GradientName &&
@@ -340,7 +370,9 @@ async function processApiSettings(userId, apiSettings, options) {
             !Number(apiSettings.fav_game) &&
             !Number(apiSettings.fav_group) &&
             !Number(apiSettings.fav_decal) &&
-            Object.keys(apiSettings).length <= 4
+            !Object.keys(extractBadgeLinks(apiSettings)).length &&
+            Object.keys(apiSettings).length <= 4 &&
+            !apiSettings.theme
         ) {
             apiProvidedMeaningfulSettings = false;
         } else {
@@ -352,6 +384,7 @@ async function processApiSettings(userId, apiSettings, options) {
     let finalEnvironment = 1;
     let finalGradient = null;
     let finalBorder = null;
+    let finalFrame = null;
     let finalGradientName = null;
 
     if (apiProvidedMeaningfulSettings) {
@@ -359,6 +392,8 @@ async function processApiSettings(userId, apiSettings, options) {
         finalEnvironment = apiSettings.environment;
         finalGradient = apiSettings.gradient;
         finalBorder = apiSettings.border ?? null;
+
+        finalFrame = await normalizeBertLink(apiSettings.berts);
         finalGradientName =
             apiSettings[GRADIENT_NAME_API_KEY] ??
             apiSettings.GradientName ??
@@ -379,12 +414,26 @@ async function processApiSettings(userId, apiSettings, options) {
         );
     }
 
+    if (
+        isOwnProfile &&
+        apiSettings &&
+        apiSettings.berts &&
+        apiProvidedMeaningfulSettings
+    ) {
+        document.dispatchEvent(
+            new CustomEvent('rovalra:syncProfileFrame', {
+                detail: { frameUrl: finalFrame },
+            }),
+        );
+    }
+
     return {
         status: finalStatus,
         environment: finalEnvironment || 1,
         gradient: finalGradient,
         GradientName: finalGradientName,
         border: finalBorder,
+        berts: finalFrame,
         pronouns: extractProfilePronouns(apiSettings),
         Views: Number(apiSettings.Views) || 0,
         hide_views:
@@ -397,6 +446,8 @@ async function processApiSettings(userId, apiSettings, options) {
         fav_game: Number(apiSettings.fav_game) || 0,
         fav_group: Number(apiSettings.fav_group) || 0,
         fav_decal: Number(apiSettings.fav_decal) || 0,
+        badges: extractBadgeLinks(apiSettings),
+        theme: apiSettings.theme || '',
     };
 }
 
@@ -414,15 +465,15 @@ export async function getUserSettings(userId, options = {}) {
     if (!options.noCache) {
         const memCached = memoryCache.get(cacheKey);
         if (memCached) {
-            const staleThreshold = isOwnProfile ? 60000 : 300000;
+            const staleThreshold = isOwnProfile
+                ? OWN_SETTINGS_STALE_MS
+                : OTHER_SETTINGS_STALE_MS;
             const isStale =
                 Date.now() - (memCached.timestamp || 0) > staleThreshold;
             if (isStale && !pendingResolvers.has(cacheKey)) {
                 if (options.disableBatch) {
                     fetchAndProcessSettings(userId, options).then((settings) =>
-                        saveToCache(cacheKey, settings, {
-                            memoryOnly: true,
-                        }),
+                        saveToCache(cacheKey, settings),
                     );
                 } else {
                     batchQueue.push({ userId, options });
@@ -443,20 +494,18 @@ export async function getUserSettings(userId, options = {}) {
             return memCached.data;
         }
 
-        const cached = !isOwnProfile
-            ? await cache.get('user_settings', cacheKey, 'local')
-            : null;
+        const cached = await cache.get('user_settings', cacheKey, 'local');
         if (cached) {
             memoryCache.set(cacheKey, cached);
-            const staleThreshold = isOwnProfile ? 60000 : 300000;
+            const staleThreshold = isOwnProfile
+                ? OWN_SETTINGS_STALE_MS
+                : OTHER_SETTINGS_STALE_MS;
             const isStale =
                 Date.now() - (cached.timestamp || 0) > staleThreshold;
             if (isStale && !pendingResolvers.has(cacheKey)) {
                 if (options.disableBatch) {
                     fetchAndProcessSettings(userId, options).then((settings) =>
-                        saveToCache(cacheKey, settings, {
-                            memoryOnly: false,
-                        }),
+                        saveToCache(cacheKey, settings),
                     );
                 } else {
                     batchQueue.push({ userId, options });
@@ -486,9 +535,7 @@ export async function getUserSettings(userId, options = {}) {
 
     if (options.disableBatch) {
         const settings = await fetchAndProcessSettings(userId, options);
-        await saveToCache(cacheKey, settings, {
-            memoryOnly: isOwnProfile,
-        });
+        await saveToCache(cacheKey, settings);
 
         return settings;
     }

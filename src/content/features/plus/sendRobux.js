@@ -111,7 +111,10 @@ async function showStep1Popup(userId, robuxAmount = 0, easterEgg = false) {
     const userFullData = await getUserFullData(userId);
     const userProfileData = (await getUserProfileData([userId])).profileDetails[0];
     const userCard = createUserCard({
-        displayName: userFullData.displayName || userFullData.name,
+        displayName:
+            userProfileData?.names?.combinedName ||
+            userFullData.displayName ||
+            userFullData.name,
         username: userFullData.name,
         thumbData: userThumbnailData,
         hidePresence: true,
@@ -285,7 +288,8 @@ async function showStep2Popup(userId, robuxAmount, easterEgg = false, error = nu
     const userFullData = await getUserFullData(userId);
     const userProfileData = (await getUserProfileData([userId])).profileDetails[0];
     const userCard = createUserCard({
-        displayName: userFullData.displayName,
+        displayName:
+            userProfileData?.names?.combinedName || userFullData.displayName,
         username: `@${userFullData.name}`,
         thumbData: userThumbnailData,
         hidePresence: true,
@@ -557,7 +561,7 @@ async function addSendRobuxButton(menu) {
     if (!userId || String(userId) === String(authedUserId)) return;
 
     const canTransfer = await getSendRobuxStatus();
-    if (!canTransfer) return;
+    //if (!canTransfer) return;
 
     const { button } = createContextMenuButton(
         await t('plus.sendRobux.profile.button', {
@@ -566,7 +570,30 @@ async function addSendRobuxButton(menu) {
     );
 
     button.addEventListener('click', async () => {
-        showStep1Popup(userId, null, window.event?.shiftKey || false)
+        if (canTransfer) {
+            showStep1Popup(userId, null, window.event?.shiftKey || false)
+        } else {
+            const easterEgg = isAprilFools() || window.event?.shiftKey || false
+            const getPlusOverlay = createOverlay({
+                title: await t(`plus.sendRobux.popup.shared.title${easterEgg ? 'Silly' : '' }`),
+                bodyContent: await t(`plus.sendRobux.popup.plusNeeded.body${easterEgg ? 'Silly' : '' }`),
+                showLogo: true,
+                actions: [
+                    createButton(await t(`plus.sendRobux.popup.plusNeeded.buyPlusBtn${easterEgg ? 'Silly' : '' }`), 'secondary', {
+                        onClick: () => {
+                            getPlusOverlay.close();
+                            window.open("/plus", "_blank");
+                        }
+                    }),
+                    createButton(await t(`plus.sendRobux.popup.${easterEgg ? 'plusNeeded.okBtnSilly' : 'shared.okBtn' }`), 'primary', {
+                        onClick: () => {
+                            getPlusOverlay.close();
+                        }
+                    }),
+                ],
+            });
+        }
+
     });
 
     const container = menu.querySelector('[role="group"]') || menu;

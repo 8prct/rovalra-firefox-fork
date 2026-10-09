@@ -1,22 +1,26 @@
 {
   "name": "rovalra",
-  "version": "2.6.4.2",
-  "description": "Unofficial Firefox and Zen Browser port of RoValra.",
-  "author": "8prct",
+  "version": "2.6.15.1",
+  "description": "Unofficial Firefox and Zen Browser fork of RoValra.",
+  "author": "8prct (fork maintenance); NotValra and contributors (original RoValra)",
   "repository": {
     "type": "git",
     "url": "https://github.com/8prct/rovalra-firefox-fork.git"
   },
   "private": true,
   "scripts": {
-    "build": "npm run clean && node build.js",
-    "clean": "rimraf dist",
+    "build": "npm run clean && node build.js && node scripts/build-firefox.js",
+    "build:chrome": "npm run clean && node build.js",
+    "clean": "rimraf dist dist-firefox",
+    "lint:firefox": "web-ext lint --source-dir dist-firefox",
+    "package:firefox": "web-ext build --source-dir dist-firefox --artifacts-dir build --overwrite-dest",
+    "start:firefox": "web-ext run --source-dir dist-firefox --start-url https://www.roblox.com",
     "lint": "eslint .",
     "test": "node scripts/check-firefox-compat.mjs"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@types/chrome": "^0.2.2",
+    "@types/three": "^0.185.4",
     "chrome-types": "^0.1.435",
     "esbuild": "^0.28.1",
     "eslint": "10.7.0",
@@ -26,6 +30,7 @@
     "prettier-eslint": "^17.1.1",
     "rimraf": "^6.1.3",
     "sass": "^1.101.3",
+    "web-ext": "^10.7.0",
     "yaml": "^2.9.0"
   },
   "dependencies": {
@@ -34,16 +39,18 @@
     "fzstd": "^0.1.1",
     "i18next": "26.3.6",
     "marked": "^18.0.5",
-    "roavatar-renderer": "^1.5.17",
-    "roblox-bat": "0.6.5",
-    "swagger-ui-dist": "^5.32.10"
+    "roavatar-renderer": "^1.9.9",
+    "roblox-bat": "0.6.5"
   },
   "overrides": {
     "brace-expansion": "^2.0.1",
     "flatted": "^3.3.2",
     "lodash": "^4.17.21",
     "minimatch": "^9.0.5",
-    "picomatch": "^4.0.2"
+    "picomatch": "^4.0.2",
+    "multimatch": {
+      "minimatch": "^3.1.2"
+    }
   },
   "lint-staged": {
     "*.js": "eslint --fix",

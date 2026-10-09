@@ -1,16 +1,8 @@
 import { SETTINGS_CONFIG } from '../content/core/settings/settingConfig.js';
 import init from './settingsCompat.ts';
+import { updateGameBookmarks } from './gameBookmarks.js';
 
 // --- Constants & State ---
-
-const menusApi = chrome.menus || chrome.contextMenus;
-
-function normalizePermissions(permission) {
-    return []
-        .concat(permission || [])
-        .map((name) => (name === 'contextMenus' ? 'menus' : name))
-        .filter(Boolean);
-}
 
 const state = {
     isMemoryFixEnabled: false,
@@ -31,6 +23,7 @@ const state = {
     badgeFullScanInterval: null,
     avatarInventoryInterval: null,
 };
+const rateLimitCooldowns = new Map();
 
 // --- Session Storage Configuration ---
 if (chrome.storage.session && chrome.storage.session.setAccessLevel) {
@@ -369,14 +362,14 @@ const contextMenuClickListener = async (info, tab) => {
 
 async function setupContextMenuListener() {
     const hasRequiredPermissions = await chrome.permissions.contains({
-        permissions: ['menus'],
+        permissions: ['contextMenus'],
     });
     if (
         hasRequiredPermissions &&
-        menusApi &&
-        !menusApi.onClicked.hasListener(contextMenuClickListener)
+        chrome.contextMenus &&
+        !chrome.contextMenus.onClicked.hasListener(contextMenuClickListener)
     ) {
-        menusApi.onClicked.addListener(contextMenuClickListener);
+        chrome.contextMenus.onClicked.addListener(contextMenuClickListener);
     }
 }
 
@@ -408,33 +401,15 @@ async function callRobloxApiBackground(options) {
         body = null,
         headers = {},
         fullUrl = null,
-        isRovalraApi = false,
-        credentials = isRovalraApi ? 'omit' : 'include',
-        noCache = false,
     } = options;
 
     let url;
     if (fullUrl) {
         const parsedUrl = new URL(fullUrl);
-        const allowedFullUrlHosts = new Set([
-            'setup.rbxcdn.com',
-            'apis.rovalra.com',
-            'catalog.rovalra.com',
-            'www.rovalra.com',
-        ]);
-        if (
-            parsedUrl.protocol !== 'https:' ||
-            !allowedFullUrlHosts.has(parsedUrl.hostname)
-        ) {
+        if (parsedUrl.hostname !== 'setup.rbxcdn.com') {
             throw new Error('Unsupported fullUrl host for background fetch');
         }
         url = parsedUrl.toString();
-    } else if (isRovalraApi) {
-        const allowedRovalraSubdomains = new Set(['apis', 'catalog', 'www']);
-        if (!allowedRovalraSubdomains.has(subdomain)) {
-            throw new Error('Unsupported RoValra API subdomain');
-        }
-        url = `https://${subdomain}.rovalra.com${endpoint}`;
     } else {
         url = `https://${subdomain}.roblox.com${endpoint}`;
     }
@@ -442,15 +417,10 @@ async function callRobloxApiBackground(options) {
     const separator = url.includes('?') ? '&' : '?';
 
     if (!endpoint?.includes('/player-hydration-service/v1/players/signed')) {
-        url += `${separator}_RoValraRequest=${noCache ? Date.now() : ''}`;
+        url += `${separator}_RoValraRequest=`;
     }
 
-    const fetchOptions = {
-        method,
-        headers: { ...headers },
-        credentials,
-        cache: noCache ? 'no-store' : 'default',
-    };
+    const fetchOptions = { method, headers: { ...headers } };
 
     if (body) {
         if (typeof body === 'object') {
@@ -465,7 +435,28 @@ async function callRobloxApiBackground(options) {
         fetchOptions.headers['X-CSRF-TOKEN'] = state.csrfTokenCache;
     }
 
+    const rateLimitKey = new URL(url).origin;
+    const cooldownUntil = rateLimitCooldowns.get(rateLimitKey) || 0;
+    if (cooldownUntil > Date.now()) {
+        await sleep(cooldownUntil - Date.now());
+    } else {
+        rateLimitCooldowns.delete(rateLimitKey);
+    }
+
     let response = await fetch(url, fetchOptions); //Verified
+
+    if (response.status === 429) {
+        const cooldown = getRateLimitDelay(response);
+        if (cooldown > 0) {
+            rateLimitCooldowns.set(
+                rateLimitKey,
+                Math.max(
+                    rateLimitCooldowns.get(rateLimitKey) || 0,
+                    Date.now() + cooldown,
+                ),
+            );
+        }
+    }
 
     if (response.status === 403 && method !== 'GET' && method !== 'HEAD') {
         const newCsrf = response.headers.get('x-csrf-token');
@@ -507,50 +498,114 @@ async function wearOutfit(outfitData) {
             return { ok: false };
         }
 
-        const detailsRes = await callWithRetry({
-            subdomain: 'avatar',
-            endpoint: `/v3/outfits/${outfitId}/details`,
+        const storedDetails = await new Promise((resolve) => {
+            chrome.storage.local.get(
+                'rovalra_avatar_rotator_details',
+                (data) => {
+                    resolve(
+                        data.rovalra_avatar_rotator_details?.[
+                            String(outfitId)
+                        ] || null,
+                    );
+                },
+            );
         });
-        if (!detailsRes?.ok) return { ok: false };
+        let details = storedDetails;
+        if (!details) {
+            const detailsRes = await callWithRetry({
+                subdomain: 'avatar',
+                endpoint: `/v4/outfits/${outfitId}/details`,
+            });
+            if (!detailsRes?.ok) return { ok: false };
+            details = await detailsRes.json();
+        }
 
-        const details = await detailsRes.json();
+        const outfitModel = details.outfitModel || details;
+        const assets = [...(outfitModel.assets || [])];
+
+        let bodyColor3s = details.bodyColor3s || outfitModel.bodyColor3s;
+
+        if (!bodyColor3s && outfitModel.bodyColors) {
+            const colorKeys = {
+                headColor: 'headColor3',
+                torsoColor: 'torsoColor3',
+                leftArmColor: 'leftArmColor3',
+                rightArmColor: 'rightArmColor3',
+                leftLegColor: 'leftLegColor3',
+                rightLegColor: 'rightLegColor3',
+            };
+
+            bodyColor3s = Object.fromEntries(
+                Object.entries(colorKeys)
+                    .filter(([key]) => outfitModel.bodyColors[key])
+                    .map(([key, outputKey]) => {
+                        const color = String(outfitModel.bodyColors[key]);
+                        return [
+                            outputKey,
+                            color.startsWith('#') ? color : `#${color}`,
+                        ];
+                    }),
+            );
+        }
+
+        const backgroundAsset =
+            details.outfitConfigurations?.background?.backgroundAsset;
         const promises = [];
 
-        if (details.assets)
+        if (backgroundAsset?.id)
+            promises.push(
+                callWithRetry({
+                    subdomain: 'avatar',
+                    endpoint: '/v4/avatar',
+                    method: 'PATCH',
+                    body: {
+                        updateTypes: ['UpdateBackground'],
+                        avatarDefinition: {
+                            updateAvatarConfig: {
+                                backgroundRequestModel: {
+                                    id: backgroundAsset.id,
+                                },
+                            },
+                        },
+                    },
+                }),
+            );
+
+        if (assets.length > 0)
             promises.push(
                 callWithRetry({
                     subdomain: 'avatar',
                     endpoint: '/v2/avatar/set-wearing-assets',
                     method: 'POST',
-                    body: { assets: details.assets },
+                    body: { assets },
                 }),
             );
-        if (details.playerAvatarType)
+        if (outfitModel.playerAvatarType)
             promises.push(
                 callWithRetry({
                     subdomain: 'avatar',
                     endpoint: '/v1/avatar/set-player-avatar-type',
                     method: 'POST',
-                    body: { playerAvatarType: details.playerAvatarType },
+                    body: { playerAvatarType: outfitModel.playerAvatarType },
                 }),
             );
-        if (details.scale)
+        if (outfitModel.scale)
             promises.push(
                 callWithRetry({
                     subdomain: 'avatar',
                     endpoint: '/v1/avatar/set-scales',
                     method: 'POST',
-                    body: details.scale,
+                    body: outfitModel.scale,
                 }),
             );
 
-        if (details.bodyColor3s) {
+        if (bodyColor3s) {
             promises.push(
                 callWithRetry({
                     subdomain: 'avatar',
                     endpoint: '/v2/avatar/set-body-colors',
                     method: 'POST',
-                    body: details.bodyColor3s,
+                    body: bodyColor3s,
                 }),
             );
         }
@@ -733,9 +788,17 @@ function sleep(ms) {
 }
 
 function getRateLimitDelay(response) {
-    const retryAfterSeconds = Number(response.headers.get('retry-after'));
-    if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
-        return retryAfterSeconds * 1000 + 1000;
+    const retryAfter = response.headers.get('retry-after');
+    if (retryAfter) {
+        const retryAfterSeconds = Number(retryAfter);
+        if (Number.isFinite(retryAfterSeconds)) {
+            return Math.max(0, retryAfterSeconds * 1000) + 1000;
+        }
+
+        const retryAt = Date.parse(retryAfter);
+        if (Number.isFinite(retryAt)) {
+            return Math.max(0, retryAt - Date.now()) + 1000;
+        }
     }
 
     const remaining = Number(response.headers.get('x-ratelimit-remaining'));
@@ -2056,10 +2119,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 chrome.permissions.onAdded.addListener((permissions) => {
     if (permissions.permissions?.includes('webNavigation'))
         setupNavigationListener();
-    if (
-        permissions.permissions?.includes('contextMenus') ||
-        permissions.permissions?.includes('menus')
-    )
+    if (permissions.permissions?.includes('contextMenus'))
         setupContextMenuListener();
     if (permissions.permissions?.includes('webRequest')) {
         updateBannedUserListener();
@@ -2085,11 +2145,10 @@ chrome.permissions.onRemoved.addListener((permissions) => {
         );
     }
     if (
-        (permissions.permissions?.includes('contextMenus') ||
-            permissions.permissions?.includes('menus')) &&
-        menusApi?.onClicked.hasListener(contextMenuClickListener)
+        permissions.permissions?.includes('contextMenus') &&
+        chrome.contextMenus?.onClicked.hasListener(contextMenuClickListener)
     ) {
-        menusApi.onClicked.removeListener(contextMenuClickListener);
+        chrome.contextMenus.onClicked.removeListener(contextMenuClickListener);
     }
     if (permissions.permissions?.includes('webRequest')) {
         chrome.webRequest.onBeforeRedirect.removeListener(
@@ -2106,8 +2165,29 @@ chrome.permissions.onRemoved.addListener((permissions) => {
     });
 });
 
+function getImageTypeFromBytes(bytes) {
+    const startsWith = (signature, offset = 0) =>
+        signature.every((byte, i) => bytes[offset + i] === byte);
+    const ascii = (text) => [...text].map((char) => char.charCodeAt(0));
+
+    if (startsWith([0x89, 0x50, 0x4e, 0x47])) return 'image/png';
+    if (startsWith([0xff, 0xd8, 0xff])) return 'image/jpeg';
+    if (startsWith(ascii('GIF8'))) return 'image/gif';
+    if (startsWith(ascii('RIFF')) && startsWith(ascii('WEBP'), 8)) {
+        return 'image/webp';
+    }
+    if (startsWith(ascii('BM'))) return 'image/bmp';
+    if (startsWith(ascii('ftypavif'), 4)) return 'image/avif';
+    return null;
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     switch (request.action) {
+        case 'updateGameBookmarks':
+            updateGameBookmarks(request.operation)
+                .then((state) => sendResponse({ state }))
+                .catch((error) => sendResponse({ error: error.message }));
+            return true;
         case 'fetchJson':
             fetch(request.url)
                 .then((res) => {
@@ -2187,78 +2267,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         case 'checkPermission':
             chrome.permissions.contains(
-                { permissions: normalizePermissions(request.permission) },
+                { permissions: [].concat(request.permission) },
                 (granted) => {
                     sendResponse({ granted });
                 },
             );
             return true;
 
-        case 'requestPermission': {
-            const permissions = normalizePermissions(request.permission).filter(
-                (permission) => permission !== 'menus',
-            );
-            if (permissions.length === 0) {
-                sendResponse({ granted: true });
-                return false;
-            }
-
-            const requestId = `permission_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-            const url = chrome.runtime.getURL(
-                `public/Assets/permission_request.html?permissions=${encodeURIComponent(
-                    JSON.stringify(permissions),
-                )}&requestId=${encodeURIComponent(requestId)}`,
-            );
-
-            let timeoutId;
-            let settled = false;
-            const finish = (granted) => {
-                if (settled) return;
-                settled = true;
-                clearTimeout(timeoutId);
-                chrome.runtime.onMessage.removeListener(listener);
-                sendResponse({ granted: !!granted });
-            };
-            const listener = (message) => {
-                if (
-                    message.action === 'permissionRequestResult' &&
-                    message.requestId === requestId
-                ) {
-                    finish(message.granted);
-                }
-            };
-
-            chrome.runtime.onMessage.addListener(listener);
-            timeoutId = setTimeout(() => finish(false), 300000);
-            chrome.windows.create(
-                {
-                    url,
-                    type: 'popup',
-                    width: 480,
-                    height: 340,
-                },
-                () => {
-                    if (chrome.runtime.lastError) finish(false);
+        case 'requestPermission':
+            chrome.permissions.request(
+                { permissions: [].concat(request.permission) },
+                (granted) => {
+                    if (chrome.runtime.lastError)
+                        console.warn(
+                            'RoValra: Permission request failed:',
+                            chrome.runtime.lastError,
+                        );
+                    sendResponse({ granted: !!granted });
                 },
             );
             return true;
-        }
 
         case 'revokePermission':
-            if (
-                normalizePermissions(request.permission).every(
-                    (permission) => permission === 'menus',
-                )
-            ) {
-                sendResponse({ revoked: false });
-                return false;
-            }
             chrome.permissions.remove(
-                {
-                    permissions: normalizePermissions(
-                        request.permission,
-                    ).filter((permission) => permission !== 'menus'),
-                },
+                { permissions: [].concat(request.permission) },
                 (removed) => {
                     if (chrome.runtime.lastError) {
                         sendResponse({
@@ -2377,6 +2409,94 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 });
             return true;
 
+        case 'fetchImageAsDataUrl': {
+            let imageUrl;
+            try {
+                imageUrl = new URL(request.url);
+            } catch {
+                sendResponse({ error: 'Invalid URL' });
+                return false;
+            }
+            if (
+                imageUrl.protocol !== 'https:' &&
+                imageUrl.protocol !== 'http:'
+            ) {
+                sendResponse({ error: 'Unsupported protocol' });
+                return false;
+            }
+            //Verified
+            fetch(imageUrl.toString(), { credentials: 'omit' })
+                .then(async (response) => {
+                    if (!response.ok) {
+                        throw new Error(`Request failed (${response.status})`);
+                    }
+                    const bytes = new Uint8Array(await response.arrayBuffer());
+                    if (bytes.length > 20 * 1024 * 1024) {
+                        throw new Error('Image too large');
+                    }
+                    const contentType = (
+                        response.headers.get('content-type') || ''
+                    ).split(';')[0];
+                    const imageType = contentType.startsWith('image/')
+                        ? contentType
+                        : getImageTypeFromBytes(bytes);
+                    if (!imageType) throw new Error('Not an image');
+                    let binary = '';
+                    for (let i = 0; i < bytes.length; i += 0x8000) {
+                        binary += String.fromCharCode(
+                            ...bytes.subarray(i, i + 0x8000),
+                        );
+                    }
+                    sendResponse({
+                        dataUrl: `data:${imageType};base64,${btoa(binary)}`,
+                    });
+                })
+                .catch((err) => sendResponse({ error: err.message }));
+            return true;
+        }
+
+        case 'proxyFetch': {
+            let parsedUrl;
+            try {
+                parsedUrl = new URL(request.url);
+            } catch {
+                sendResponse({ error: 'Invalid URL' });
+                return false;
+            }
+            if (
+                parsedUrl.protocol !== 'https:' &&
+                parsedUrl.protocol !== 'http:'
+            ) {
+                sendResponse({ error: 'Unsupported protocol' });
+                return false;
+            }
+            const { method, headers, body, credentials, cache, redirect } =
+                request.options || {};
+            //Verified
+            fetch(parsedUrl.toString(), {
+                method,
+                headers,
+                body,
+                credentials,
+                cache,
+                redirect,
+            })
+                .then(async (response) => {
+                    const responseHeaders = {};
+                    response.headers.forEach(
+                        (val, key) => (responseHeaders[key] = val),
+                    );
+                    sendResponse({
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: responseHeaders,
+                        body: await response.arrayBuffer().catch(() => null),
+                    });
+                })
+                .catch((err) => sendResponse({ error: err.message }));
+            return true;
+        }
+
         case 'fetchRobloxApi':
             callRobloxApiBackground(request.options)
                 .then(async (response) => {
@@ -2408,12 +2528,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return true;
 
         case 'updateContextMenu':
-            if (menusApi) {
+            if (chrome.contextMenus) {
                 if (request.feature === 'copyid') {
                     chrome.storage.local.get(
                         ['copyIdEnabled', 'copyUniverseIdEnabled'],
                         (settings) => {
-                            menusApi.removeAll(() => {
+                            chrome.contextMenus.removeAll(() => {
                                 if (
                                     !chrome.runtime.lastError &&
                                     request.ids?.length > 0
@@ -2423,7 +2543,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                                             if (
                                                 settings.copyUniverseIdEnabled
                                             ) {
-                                                menusApi.create({
+                                                chrome.contextMenus.create({
                                                     id: `rovalra-copy-universe-${item.id}`,
                                                     title: item.title,
                                                     contexts: ['link'],
@@ -2434,7 +2554,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                                             }
                                         } else {
                                             if (settings.copyIdEnabled) {
-                                                menusApi.create({
+                                                chrome.contextMenus.create({
                                                     id: `rovalra-copy-${item.id}`,
                                                     title: item.title,
                                                     contexts: ['link'],
@@ -2455,7 +2575,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                             ['viewIdEnabled'],
                             (settings) => {
                                 if (settings.viewIdEnabled) {
-                                    menusApi.create({
+                                    chrome.contextMenus.create({
                                         id: `rovalra-viewid-${id}`,
                                         title: request.data.title,
                                         contexts: ['link'],

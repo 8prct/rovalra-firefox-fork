@@ -2,7 +2,7 @@ import { getRegionData } from '../../regions.js';
 import { SETTINGS_CONFIG } from '../settingConfig.js';
 import { generateSettingsUI } from '../generateSettings.js';
 import { initSettings, syncDonatorTier } from '../handlesettings.js';
-import { buildSettingsPage, getSettingsTabKey } from './settingui.js';
+import { buildSettingsPage } from './settingui.js';
 import {
     updateContent,
     handleSearch,
@@ -10,6 +10,7 @@ import {
     applyTheme,
 } from '../../../features/settings/index.js';
 import { createBadgeSettings } from '../badgeSettings.js';
+import DOMPurify from '../../packages/dompurify.js';
 
 let isSettingsPage = false;
 
@@ -28,9 +29,38 @@ function findStaticSettingsTab(hashKey) {
         if (!STATIC_SETTINGS_TAB_IDS.has(button.id)) return false;
         return (
             button.id.toLowerCase() === lowerHashKey ||
-            getSettingsTabKey(button) === lowerHashKey
+            button.text.toLowerCase() === lowerHashKey
         );
     });
+}
+
+function isKnownSettingsTab(tab) {
+    if (!tab) return false;
+
+    const normalizedTab = tab.toLowerCase();
+    if (normalizedTab === 'search') return true;
+    if (findStaticSettingsTab(normalizedTab)) return true;
+
+    return Object.keys(SETTINGS_CONFIG).some(
+        (key) => key.toLowerCase() === normalizedTab,
+    );
+}
+
+function getRequestedSettingsTab() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const rovalraTab = urlParams.get('rovalra');
+    const hashTab = decodeURIComponent(
+        window.location.hash.replace('#!/', '').replace('#!', ''),
+    );
+
+    if (rovalraTab?.toLowerCase() === 'search' && urlParams.has('q')) {
+        return 'search';
+    }
+
+    if (isKnownSettingsTab(rovalraTab)) return rovalraTab;
+    if (isKnownSettingsTab(hashTab)) return hashTab;
+
+    return 'info';
 }
 
 async function isFunStuffTabEnabled() {
@@ -178,7 +208,7 @@ export async function checkRoValraPage() {
                 'Falling back to info page.',
             );
             const infoButtonData = buttonData.find(
-                (button) => button.id === 'info',
+                (b) => b.text.toLowerCase() === 'info',
             );
             if (infoButtonData) {
                 await updateContent(infoButtonData, contentContainer);
@@ -191,13 +221,7 @@ export async function checkRoValraPage() {
     }
 
     async function handleHashChange() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const rovalraTabFromParam = urlParams.get('rovalra');
-        const hashPart = decodeURIComponent(
-            window.location.hash.replace('#!/', '').replace('#!', ''),
-        );
-        const currentHash = hashPart || rovalraTabFromParam || 'info';
-        await loadTabContent(currentHash);
+        await loadTabContent(getRequestedSettingsTab());
     }
 
     window.addEventListener('hashchange', handleHashChange, false);
@@ -225,7 +249,7 @@ export async function checkRoValraPage() {
 
     if (rovalraHeader && settingsContainer) {
         const unifiedMenu = document.getElementById('unified-menu');
-        await loadTabContent(rovalraTab || 'info');
+        await loadTabContent(getRequestedSettingsTab());
         await applyTheme();
 
         regionDataPromise.then((loadedRegionData) => {

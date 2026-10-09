@@ -7,7 +7,6 @@ import {
 import { t } from '../../core/locale/i18n.js';
 import { observeElement } from '../../core/observer.js';
 import { settings } from '../../core/settings/getSettings.js';
-import { dispatchPageEvent } from '../../core/firefox/compat.js';
 import { createInteractiveTimestamp } from '../../core/ui/time/time.js';
 import {
     isAuthenticatedUser13PlusAndAgeChecked,
@@ -17,14 +16,14 @@ import {
 const UNDERRATED_GAMES_TOPIC_ID = 10000013058;
 const UNDERRATED_GAMES_SUB_ID = 'rovalra-underrated-games';
 const DISCORD_MARKER = '__ROVALRA_UNDERRATED_GAMES_DISCORD__';
-const DISCORD_LINK = 'https://discord.gg/YwpJFKr6Ww';
+const DISCORD_LINK = 'https://discord.gg/BjWaQ4e7AY';
 const DEFAULT_LOCALE = {
     topic: 'Underrated Games',
     subtitle: 'Underrated games hand picked by the RoValra community.',
     rotates: 'Rotates',
     suggestOnDiscord: `Suggest underrated games on ${DISCORD_MARKER}`,
     ageRestrictionWarning:
-        "Some of these games may be locked to 16+ because of Roblox's 500 HEP requirement.",
+        "Some of these games may be locked to 16+ because of Roblox's 250 HEP requirement.",
 };
 const ROTATION_MARKER = '__ROVALRA_UNDERRATED_GAMES_ROTATION__';
 
@@ -305,7 +304,11 @@ function enhanceUnderratedGameTile(link) {
 }
 
 function publishUnderratedGamesSort(sort) {
-    dispatchPageEvent('rovalra-home-extra-sorts', { sorts: [sort] });
+    document.dispatchEvent(
+        new CustomEvent('rovalra-home-extra-sorts', {
+            detail: { source: UNDERRATED_GAMES_SUB_ID, sorts: [sort] },
+        }),
+    );
 }
 
 function replaceRotationMarker(root) {
